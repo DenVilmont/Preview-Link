@@ -523,13 +523,17 @@ function calculatePopupPosition(anchorRect, popupWidth, popupHeight) {
 }
 
 function createPopup(url, x, y, anchorRect) {
+    const existingPopup = popups.find((p) => p.requestedUrl === url || p.currentUrl === url);
+    if (existingPopup) {
+        bringToFront(existingPopup.popupId);
+        flashPopupAttention(existingPopup);
+        return;
+    }
     // Limit to max popups: do not open new ones when limit reached
     if (popups.length >= MAX_POPUPS) {
         showLimitReachedNotice();
         return;
     }
-    // Prevent opening the same link multiple times
-    if (popups.some(p => p.requestedUrl === url || p.currentUrl === url)) return;
 
     const popupId = `popup-${++popupIdCounter}`;
     const popupEntry = {
@@ -545,6 +549,7 @@ function createPopup(url, x, y, anchorRect) {
         loadingBar: null,
         loadingAnimationTimer: null,
         blockedTimeoutTimer: null,
+        attentionTimer: null,
         x,
         y
     };
@@ -705,6 +710,10 @@ function createPopup(url, x, y, anchorRect) {
 function closePopup(popupId) {
     const entry = getPopupById(popupId);
     if (!entry || !entry.popup) return;
+    if (entry.attentionTimer) {
+        clearTimeout(entry.attentionTimer);
+        entry.attentionTimer = null;
+    }
     clearPopupLoadLifecycle(entry);
     entry.popup.style.opacity = '0';
     setTimeout(() => {
@@ -911,6 +920,21 @@ function bringToFront(popupId, urlFallback) {
     if (entry) {
         entry.popup.style.zIndex = ++zIndexCounter;
     }
+}
+
+function flashPopupAttention(popupEntry) {
+    if (!popupEntry || !popupEntry.popup) return;
+    const popup = popupEntry.popup;
+    popup.style.transition = 'box-shadow 0.2s ease, border-color 0.2s ease, opacity 0.3s';
+    popup.style.borderColor = '#ffd24d';
+    popup.style.boxShadow = '0 0 0 4px rgba(255, 210, 77, 0.55), 0 8px 32px rgba(0,0,0,0.25)';
+    clearTimeout(popupEntry.attentionTimer);
+    popupEntry.attentionTimer = setTimeout(() => {
+        popup.style.borderColor = '';
+        popup.style.boxShadow = '';
+        popup.style.transition = 'opacity 0.3s, transform 0.3s';
+        popupEntry.attentionTimer = null;
+    }, 350);
 }
 
 function getPopupById(popupId) {

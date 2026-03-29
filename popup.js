@@ -81,14 +81,12 @@ document.addEventListener('DOMContentLoaded', () => {
       toggle.checked = data.enabled;
       maxInput.value = data.maxPopups;
       renderInteractionSettings(interactionType, data.hoverDelay, triggerKey);
-      updateIcon(data.enabled);
     }
   );
 
   toggle.addEventListener('change', () => {
     const enabled = toggle.checked;
     chrome.storage.local.set({ enabled });
-    updateIcon(enabled);
   });
 
   maxInput.addEventListener('change', () => {
@@ -141,18 +139,3 @@ document.addEventListener('DOMContentLoaded', () => {
     document.addEventListener('keydown', handler, true);
   });
 });
-
-function updateIcon(enabled) {
-  const path = enabled ? {
-    '16': 'icons/icon-on.png',
-    '32': 'icons/icon-on.png',
-    '48': 'icons/icon-on.png',
-    '128': 'icons/icon-on.png'
-  } : {
-    '16': 'icons/icon-off.png',
-    '32': 'icons/icon-off.png',
-    '48': 'icons/icon-off.png',
-    '128': 'icons/icon-off.png'
-  };
-  chrome.action.setIcon({ path });
-}
