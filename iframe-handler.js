@@ -12,10 +12,12 @@ chrome.storage.onChanged.addListener((changes, area) => {
 if (window.self !== window.top) {
   function sendPopupUrlUpdate() {
     if (!iframeEnabled) return;
-    const popupId = window.frameElement && window.frameElement.dataset
-      ? window.frameElement.dataset.popupId
+    const frameDataset = window.frameElement && window.frameElement.dataset
+      ? window.frameElement.dataset
       : null;
-    if (!popupId) return;
+    const popupId = frameDataset ? frameDataset.popupId : null;
+    const attemptId = frameDataset ? frameDataset.attemptId : null;
+    if (!popupId || !attemptId) return;
     window.parent.postMessage(
       {
         source: 'link-preview-extension',
@@ -23,6 +25,29 @@ if (window.self !== window.top) {
         version: 1,
         action: 'updatePopupUrl',
         popupId,
+        attemptId,
+        url: window.location.href
+      },
+      '*'
+    );
+  }
+
+  function sendPopupRuntimeReady() {
+    if (!iframeEnabled) return;
+    const frameDataset = window.frameElement && window.frameElement.dataset
+      ? window.frameElement.dataset
+      : null;
+    const popupId = frameDataset ? frameDataset.popupId : null;
+    const attemptId = frameDataset ? frameDataset.attemptId : null;
+    if (!popupId || !attemptId) return;
+    window.parent.postMessage(
+      {
+        source: 'link-preview-extension',
+        type: 'popup-runtime-bridge',
+        version: 1,
+        action: 'previewRuntimeReady',
+        popupId,
+        attemptId,
         url: window.location.href
       },
       '*'
@@ -30,9 +55,13 @@ if (window.self !== window.top) {
   }
 
   if (document.readyState === 'complete') {
+    sendPopupRuntimeReady();
     sendPopupUrlUpdate();
   } else {
-    window.addEventListener('load', sendPopupUrlUpdate, { once: true });
+    window.addEventListener('load', () => {
+      sendPopupRuntimeReady();
+      sendPopupUrlUpdate();
+    }, { once: true });
   }
 
   // Handle wheel events within iframe: allow native smooth scrolling and prevent propagation to host
