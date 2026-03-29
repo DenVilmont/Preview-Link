@@ -1,0 +1,104 @@
+name: Build extension package
+
+on:
+  push:
+    branches:
+      - main
+  pull_request:
+  workflow_dispatch:
+
+jobs:
+  build-zip:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Validate manifest and build ZIP
+        id: build
+        shell: bash
+        run: |
+          python <<'PY'
+          import json
+          import os
+          import re
+          import sys
+          import zipfile
+
+          required_files = [
+              "manifest.json",
+              "background.js",
+              "content.js",
+              "iframe-handler.js",
+              "popup.html",
+              "popup.js",
+          ]
+
+          for path in required_files:
+              if not os.path.exists(path):
+                  print(f"Missing required file: {path}")
+                  sys.exit(1)
+
+          with open("manifest.json", "r", encoding="utf-8") as f:
+              manifest = json.load(f)
+
+          version = manifest.get("version")
+          if not version:
+              print("manifest.json is missing version")
+              sys.exit(1)
+
+          # Chrome extension version: 1 to 4 numeric parts, each 0..65535, not all zero
+          if not re.fullmatch(r"(0|[1-9]\d*)(\.(0|[1-9]\d*)){0,3}", version):
+              print(f"Invalid extension version format: {version}")
+              sys.exit(1)
+
+          parts = [int(p) for p in version.split(".")]
+          if any(p < 0 or p > 65535 for p in parts):
+              print(f"Version part out of range: {version}")
+              sys.exit(1)
+
+          if all(p == 0 for p in parts):
+              print("Version cannot be all zeros")
+              sys.exit(1)
+
+          os.makedirs("dist", exist_ok=True)
+          zip_path = os.path.join("dist", f"preview-link-{version}.zip")
+
+          excluded_dirs = {
+              ".git", ".github", "_metadata", "dist", "build", "release", "artifacts",
+              ".vscode", ".idea", "__pycache__", "node_modules"
+          }
+          excluded_files = {".gitignore", "README.md"}
+          excluded_suffixes = (".zip", ".crx", ".log")
+
+          with zipfile.ZipFile(zip_path, "w", zipfile.ZIP_DEFLATED) as zf:
+              for root, dirs, files in os.walk("."):
+                  dirs[:] = [d for d in dirs if d not in excluded_dirs]
+
+                  for file_name in files:
+                      full_path = os.path.join(root, file_name)
+                      rel_path = os.path.relpath(full_path, ".")
+
+                      if rel_path.startswith(".git/") or rel_path.startswith(".github/") or rel_path.startswith("_metadata/"):
+                          continue
+
+                      if rel_path in excluded_files:
+                          continue
+
+                      if rel_path.endswith(excluded_suffixes):
+                          continue
+
+                      zf.write(full_path, rel_path)
+
+          print(f"Built ZIP: {zip_path}")
+
+          with open(os.environ["GITHUB_OUTPUT"], "a", encoding="utf-8") as out:
+              out.write(f"version={version}\n")
+          PY
+
+      - name: Upload ZIP artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: preview-link-v${{ steps.build.outputs.version }}-run-${{ github.run_number }}
+          path: dist/*.zip
