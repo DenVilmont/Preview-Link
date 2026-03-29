@@ -4,46 +4,86 @@ document.addEventListener('DOMContentLoaded', () => {
   const delaySlider = document.getElementById('hover-delay');
   const delayLabel = document.getElementById('hover-delay-label');
   const interactionHover = document.getElementById('interaction-hover');
-  const interactionButton = document.getElementById('interaction-button');
+  const interactionHoverWithKey = document.getElementById('interaction-hover-with-key');
   const keySelector = document.getElementById('key-selector');
   const setKeyBtn = document.getElementById('set-key-btn');
   const keyDisplay = document.getElementById('key-display');
   const delayContainer = document.getElementById('delay-container');
 
-  // Helper para mostrar la tecla a partir de e.code
-  function codeToLabel(code) {
-    let disp = code;
-    if (code.startsWith('Key')) {
-      disp = code.slice(3);
-    } else if (code.startsWith('Digit')) {
-      disp = code.slice(5);
+  function normalizeInteractionType(value) {
+    return value === 'button' ? 'hoverWithKey' : value;
+  }
+
+  function normalizeTriggerKey(settings) {
+    return settings.triggerKey || settings.interactionKey || '';
+  }
+
+  function migrateSettingsIfNeeded(settings) {
+    const updates = {};
+    if (settings.interactionType === 'button') {
+      updates.interactionType = 'hoverWithKey';
     }
-    return disp.toUpperCase();
+    if (settings.interactionKey && !settings.triggerKey) {
+      updates.triggerKey = settings.interactionKey;
+    }
+    if (Object.keys(updates).length > 0) {
+      chrome.storage.local.set(updates);
+    }
+  }
+
+  // Helper to display a readable label from KeyboardEvent.code
+  function codeToLabel(code) {
+    let display = code;
+    if (code.startsWith('Key')) {
+      display = code.slice(3);
+    } else if (code.startsWith('Digit')) {
+      display = code.slice(5);
+    }
+    return display.toUpperCase();
+  }
+
+  function setKeyDisplay(code) {
+    keyDisplay.textContent = code ? codeToLabel(code) : 'None';
   }
 
   // Load initial state and settings
-  chrome.storage.local.get({ enabled: true, maxPopups: 2, hoverDelay: 2000, interactionType: 'hover', interactionKey: '' }, (data) => {
-    toggle.checked = data.enabled;
-    maxInput.value = data.maxPopups;
-    delaySlider.value = data.hoverDelay;
-    delayLabel.textContent = data.hoverDelay + ' ms';
-    // Initialize interaction UI y visibilidad del selector de tecla
-    if (data.interactionType === 'hover') {
-      interactionHover.checked = true;
-      delaySlider.disabled = false;
-      keySelector.style.display = 'none';
-      delayContainer.style.display = 'flex';
-    } else {
-      interactionButton.checked = true;
-      delaySlider.value = 0;
-      delayLabel.textContent = '0 ms';
-      delaySlider.disabled = true;
-      keySelector.style.display = 'flex';
-      keyDisplay.textContent = data.interactionKey ? codeToLabel(data.interactionKey) : 'None';
-      delayContainer.style.display = 'none';
+  chrome.storage.local.get(
+    {
+      enabled: true,
+      maxPopups: 2,
+      hoverDelay: 2000,
+      interactionType: 'hover',
+      triggerKey: '',
+      interactionKey: ''
+    },
+    (data) => {
+      const interactionType = normalizeInteractionType(data.interactionType);
+      const triggerKey = normalizeTriggerKey(data);
+      migrateSettingsIfNeeded(data);
+
+      toggle.checked = data.enabled;
+      maxInput.value = data.maxPopups;
+      delaySlider.value = data.hoverDelay;
+      delayLabel.textContent = data.hoverDelay + ' ms';
+
+      // Initialize interaction UI and key selector visibility
+      if (interactionType === 'hover') {
+        interactionHover.checked = true;
+        delaySlider.disabled = false;
+        keySelector.style.display = 'none';
+        delayContainer.style.display = 'flex';
+      } else {
+        interactionHoverWithKey.checked = true;
+        delaySlider.value = 0;
+        delayLabel.textContent = '0 ms';
+        delaySlider.disabled = true;
+        keySelector.style.display = 'flex';
+        setKeyDisplay(triggerKey);
+        delayContainer.style.display = 'none';
+      }
+      updateIcon(data.enabled);
     }
-    updateIcon(data.enabled);
-  });
+  );
 
   toggle.addEventListener('change', () => {
     const enabled = toggle.checked;
@@ -79,25 +119,27 @@ document.addEventListener('DOMContentLoaded', () => {
       delayContainer.style.display = 'flex';
     }
   });
-  interactionButton.addEventListener('change', () => {
-    if (interactionButton.checked) {
-      chrome.storage.local.set({ interactionType: 'button' });
+
+  interactionHoverWithKey.addEventListener('change', () => {
+    if (interactionHoverWithKey.checked) {
+      chrome.storage.local.set({ interactionType: 'hoverWithKey' });
       chrome.storage.local.set({ hoverDelay: 0 });
       delaySlider.value = 0;
       delayLabel.textContent = '0 ms';
       delaySlider.disabled = true;
       keySelector.style.display = 'flex';
-      keyDisplay.textContent = ''; // hasta que se asigne
+      setKeyDisplay('');
       delayContainer.style.display = 'none';
     }
   });
-  // Botón de captura: escucha siguiente pulsación independientemente de layout
+
+  // Key capture button: listen for the next key regardless of layout
   setKeyBtn.addEventListener('click', () => {
     setKeyBtn.textContent = 'Press a key...';
     const handler = (e) => {
       const code = e.code;
-      chrome.storage.local.set({ interactionKey: code }, () => {
-        keyDisplay.textContent = codeToLabel(code);
+      chrome.storage.local.set({ triggerKey: code }, () => {
+        setKeyDisplay(code);
         setKeyBtn.textContent = 'Set key';
       });
       document.removeEventListener('keydown', handler, true);
@@ -119,4 +161,4 @@ function updateIcon(enabled) {
     '128': 'icons/icon-off.png'
   };
   chrome.action.setIcon({ path });
-} 
+}
