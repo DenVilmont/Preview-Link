@@ -128,7 +128,9 @@ document.addEventListener('DOMContentLoaded', () => {
       delayLabel.textContent = '0 ms';
       delaySlider.disabled = true;
       keySelector.style.display = 'flex';
-      setKeyDisplay('');
+      chrome.storage.local.get({ triggerKey: '', interactionKey: '' }, (settings) => {
+        setKeyDisplay(normalizeTriggerKey(settings));
+      });
       delayContainer.style.display = 'none';
     }
   });
