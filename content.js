@@ -607,8 +607,50 @@ function buildPreviewCandidates(originalUrl) {
     return candidates;
 }
 
+function normalizePreviewIdentityFallback(originalUrl) {
+    try {
+        const parsed = new URL(originalUrl);
+        parsed.hash = '';
+        return parsed.toString();
+    } catch (_) {
+        return originalUrl;
+    }
+}
+
+function getPreviewIdentityKey(originalUrl) {
+    let parsed;
+    try {
+        parsed = new URL(originalUrl);
+    } catch (_) {
+        return normalizePreviewIdentityFallback(originalUrl);
+    }
+
+    const host = parsed.hostname.toLowerCase();
+    const pathname = parsed.pathname || '';
+    const ytVideoId = extractYouTubeVideoId(parsed);
+    if (ytVideoId) return `youtube:${ytVideoId}`;
+
+    if (host === 'www.tiktok.com' || host === 'tiktok.com') {
+        const tiktokMatch = pathname.match(/^\/@[^/]+\/video\/([^/?#]+)/);
+        if (tiktokMatch && tiktokMatch[1]) return `tiktok:${tiktokMatch[1]}`;
+    }
+
+    if (host === 'rutube.ru') {
+        const rutubeMatch = pathname.match(/^\/(video|shorts)\/([^/]+)\/?$/);
+        if (rutubeMatch && rutubeMatch[2]) return `rutube:${rutubeMatch[2]}`;
+    }
+
+    if (host === 'vimeo.com' || host === 'www.vimeo.com') {
+        const vimeoMatch = pathname.match(/^\/(\d+)\/?$/);
+        if (vimeoMatch && vimeoMatch[1]) return `vimeo:${vimeoMatch[1]}`;
+    }
+
+    return normalizePreviewIdentityFallback(originalUrl);
+}
+
 function createPopup(url, x, y, anchorRect) {
-    const existingPopup = popups.find((p) => p.originalUrl === url || p.requestedUrl === url || p.currentUrl === url);
+    const previewIdentityKey = getPreviewIdentityKey(url);
+    const existingPopup = popups.find((p) => p.previewIdentityKey === previewIdentityKey);
     if (existingPopup) {
         bringToFront(existingPopup.popupId);
         flashPopupAttention(existingPopup);
@@ -624,6 +666,7 @@ function createPopup(url, x, y, anchorRect) {
     const popupEntry = {
         popupId,
         originalUrl: url,
+        previewIdentityKey,
         requestedUrl: url,
         currentUrl: url,
         currentPreviewUrl: url,
@@ -950,15 +993,6 @@ function finalizePopupBlocked(popupEntry, message) {
         popupEntry,
         message || 'This page cannot be shown in an embedded preview.',
         'blocked'
-    );
-}
-
-function finalizePopupError(popupEntry) {
-    finishPopupLoadingState(popupEntry);
-    renderPopupFallback(
-        popupEntry,
-        'Preview failed to load. Try opening the page in a new tab.',
-        'error'
     );
 }
 

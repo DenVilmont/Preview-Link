@@ -54,14 +54,13 @@ if (window.self !== window.top) {
     );
   }
 
-  if (document.readyState === 'complete') {
-    sendPopupRuntimeReady();
-    sendPopupUrlUpdate();
-  } else {
-    window.addEventListener('load', () => {
-      sendPopupRuntimeReady();
-      sendPopupUrlUpdate();
-    }, { once: true });
+  // Child script liveness handshake: emit as soon as this content script runs.
+  sendPopupRuntimeReady();
+  sendPopupUrlUpdate();
+
+  // Keep a later URL sync for freshness after document load.
+  if (document.readyState !== 'complete') {
+    window.addEventListener('load', sendPopupUrlUpdate, { once: true });
   }
 
   // Handle wheel events within iframe: allow native smooth scrolling and prevent propagation to host
