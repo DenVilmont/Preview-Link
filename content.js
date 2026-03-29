@@ -523,13 +523,17 @@ function calculatePopupPosition(anchorRect, popupWidth, popupHeight) {
 }
 
 function createPopup(url, x, y, anchorRect) {
+    const existingPopup = popups.find((p) => p.requestedUrl === url || p.currentUrl === url);
+    if (existingPopup) {
+        bringToFront(existingPopup.popupId);
+        flashPopupAttention(existingPopup);
+        return;
+    }
     // Limit to max popups: do not open new ones when limit reached
     if (popups.length >= MAX_POPUPS) {
         showLimitReachedNotice();
         return;
     }
-    // Prevent opening the same link multiple times
-    if (popups.some(p => p.requestedUrl === url || p.currentUrl === url)) return;
 
     const popupId = `popup-${++popupIdCounter}`;
     const popupEntry = {
@@ -545,6 +549,7 @@ function createPopup(url, x, y, anchorRect) {
         loadingBar: null,
         loadingAnimationTimer: null,
         blockedTimeoutTimer: null,
+        attentionTimer: null,
         x,
         y
     };
@@ -705,6 +710,10 @@ function createPopup(url, x, y, anchorRect) {
 function closePopup(popupId) {
     const entry = getPopupById(popupId);
     if (!entry || !entry.popup) return;
+    if (entry.attentionTimer) {
+        clearTimeout(entry.attentionTimer);
+        entry.attentionTimer = null;
+    }
     clearPopupLoadLifecycle(entry);
     entry.popup.style.opacity = '0';
     setTimeout(() => {
@@ -911,6 +920,19 @@ function bringToFront(popupId, urlFallback) {
     if (entry) {
         entry.popup.style.zIndex = ++zIndexCounter;
     }
+}
+
+function flashPopupAttention(popupEntry) {
+    if (!popupEntry || !popupEntry.popup) return;
+    const popup = popupEntry.popup;
+    popup.classList.remove('link-preview-popup--attention');
+    void popup.offsetWidth;
+    popup.classList.add('link-preview-popup--attention');
+    clearTimeout(popupEntry.attentionTimer);
+    popupEntry.attentionTimer = setTimeout(() => {
+        popup.classList.remove('link-preview-popup--attention');
+        popupEntry.attentionTimer = null;
+    }, 350);
 }
 
 function getPopupById(popupId) {

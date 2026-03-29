@@ -17,6 +17,11 @@
   border: 2px solid #4f8cff;
   box-sizing: border-box;
 }
+.link-preview-popup--attention {
+  border-color: #ffd24d;
+  box-shadow: 0 0 0 4px rgba(255, 210, 77, 0.55), 0 8px 32px rgba(0,0,0,0.25);
+  transition: border-color 0.2s ease, box-shadow 0.2s ease;
+}
 .link-preview-popup[style*="opacity: 1"] {
   opacity: 1;
   transform: scale(1);
