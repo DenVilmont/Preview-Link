@@ -4,7 +4,6 @@ let MAX_POPUPS = 2;
 let popupIdCounter = 0;
 // Hover delay before opening popup (ms)
 let hoverDelay = 2000;
-let hoverTimer = null;
 
 // Enabled/disabled and additional settings
 let enabled = true;
@@ -57,36 +56,80 @@ chrome.storage.local.get(
   }
 );
 
-function onContentMouseMove(e) {
+const hoverInteraction = {
+  activeLink: null,
+  activeUrl: null,
+  activeRect: null,
+  timerId: null,
+  timerPending: false,
+  keyEligible: false
+};
+
+function clearHoverTimer() {
+  if (hoverInteraction.timerId) {
+    clearTimeout(hoverInteraction.timerId);
+  }
+  hoverInteraction.timerId = null;
+  hoverInteraction.timerPending = false;
+}
+
+function resetHoverInteraction() {
+  clearHoverTimer();
+  hoverInteraction.activeLink = null;
+  hoverInteraction.activeUrl = null;
+  hoverInteraction.activeRect = null;
+  hoverInteraction.keyEligible = false;
+}
+
+function isEligibleAnchor(link) {
+  return !!(link && link.href && link.offsetWidth > 0 && link.offsetHeight > 0);
+}
+
+function onContentPointerOver(e) {
   if (!enabled) return;
-  const link = e.target.closest('a');
-  if (!(link && link.href && link.offsetWidth > 0 && link.offsetHeight > 0)) {
-    if (hoverTimer) clearTimeout(hoverTimer);
-    hoverTimer = null;
-    lastHoveredLink = null;
-    lastSentHoverUrl = null;
+  const link = e.target.closest('a[href]');
+  if (!isEligibleAnchor(link)) {
     return;
   }
+  if (hoverInteraction.activeLink === link) return;
+
+  clearHoverTimer();
+
   const rect = link.getBoundingClientRect();
   const localRect = rectToPayload(rect);
-  lastHoveredLink = link;
-  if (lastSentHoverUrl !== link.href) {
-    lastSentHoverUrl = link.href;
-    dispatchPreviewRequest('updateHover', link.href, localRect, null);
-  }
+  hoverInteraction.activeLink = link;
+  hoverInteraction.activeUrl = link.href;
+  hoverInteraction.activeRect = localRect;
+  hoverInteraction.keyEligible = interactionType === 'hoverWithKey';
+  dispatchPreviewRequest('updateHover', link.href, localRect, null);
+
   if (interactionType === 'hover') {
-    if (hoverTimer) clearTimeout(hoverTimer);
-    hoverTimer = setTimeout(() => {
-      if (lastPreviewedLink === link.href && Date.now() - lastPreviewedTime < 500) {
-        hoverTimer = null;
+    const enteredLink = link;
+    const enteredUrl = link.href;
+    hoverInteraction.timerPending = true;
+    hoverInteraction.timerId = setTimeout(() => {
+      if (hoverInteraction.activeLink !== enteredLink || hoverInteraction.activeUrl !== enteredUrl) {
+        clearHoverTimer();
         return;
       }
-      requestPreviewOpen(link.href, localRect, 'hover');
-      lastPreviewedLink = link.href;
+      if (lastPreviewedLink === link.href && Date.now() - lastPreviewedTime < 500) {
+        clearHoverTimer();
+        return;
+      }
+      requestPreviewOpen(enteredUrl, hoverInteraction.activeRect || localRect, 'hover');
+      lastPreviewedLink = enteredUrl;
       lastPreviewedTime = Date.now();
-      hoverTimer = null;
+      clearHoverTimer();
     }, hoverDelay);
   }
+}
+
+function onContentPointerOut(e) {
+  if (!enabled || !hoverInteraction.activeLink) return;
+  const exitedLink = e.target.closest('a[href]');
+  if (exitedLink !== hoverInteraction.activeLink) return;
+  if (e.relatedTarget && hoverInteraction.activeLink.contains(e.relatedTarget)) return;
+  resetHoverInteraction();
 }
 
 function rectToPayload(rect) {
@@ -202,7 +245,7 @@ function onContentKeyDown(e) {
   if (!enabled) return;
   if (interactionType === 'hover') return;
   if (interactionType === 'hoverWithKey') {
-    if (triggerKey && e.code === triggerKey) {
+    if (triggerKey && e.code === triggerKey && hoverInteraction.keyEligible && hoverInteraction.activeUrl) {
       chrome.runtime.sendMessage({ action: 'openKeyPreview' });
     }
     return;
@@ -238,7 +281,8 @@ function handleRuntimeMessage(msg) {
 
 function attachListeners() {
   if (listenersAttached) return;
-  document.addEventListener('mousemove', onContentMouseMove);
+  document.addEventListener('pointerover', onContentPointerOver);
+  document.addEventListener('pointerout', onContentPointerOut);
   document.addEventListener('keydown', onContentKeyDown);
   chrome.runtime.onMessage.addListener(handleRuntimeMessage);
   window.addEventListener('message', onCoordinateHopMessage);
@@ -247,10 +291,12 @@ function attachListeners() {
 
 function detachListeners() {
   if (!listenersAttached) return;
-  document.removeEventListener('mousemove', onContentMouseMove);
+  document.removeEventListener('pointerover', onContentPointerOver);
+  document.removeEventListener('pointerout', onContentPointerOut);
   document.removeEventListener('keydown', onContentKeyDown);
   chrome.runtime.onMessage.removeListener(handleRuntimeMessage);
   window.removeEventListener('message', onCoordinateHopMessage);
+  resetHoverInteraction();
   listenersAttached = false;
 }
 
@@ -276,6 +322,7 @@ chrome.storage.onChanged.addListener((changes, area) => {
   }
   if (changes.interactionType) {
     interactionType = normalizeInteractionType(changes.interactionType.newValue);
+    resetHoverInteraction();
   }
   if (changes.triggerKey) {
     triggerKey = changes.triggerKey.newValue || '';
@@ -495,11 +542,6 @@ function simulateLoadingBar(popupEntry) {
     iframe.addEventListener('error', () => { loading = false; }, { once: true });
     step();
 }
-
-// Track last hovered link and its position
-let lastHoveredLink = null;
-// Variable to dedupe hover update messages for openKeyPreview
-let lastSentHoverUrl = null;
 
 // Debounce to prevent double opening
 let lastPreviewedLink = null;
