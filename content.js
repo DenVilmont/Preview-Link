@@ -807,6 +807,7 @@ function mountPopupIframe(popupEntry, url) {
     popupEntry.bodyContainer.appendChild(iframe);
 
     iframe.addEventListener('load', () => {
+        if (popupEntry.iframe !== iframe) return;
         const loadedUrl = iframe.src || popupEntry.currentUrl || popupEntry.requestedUrl;
         if (loadedUrl === 'about:blank' && popupEntry.requestedUrl !== 'about:blank') {
             finalizePopupBlocked(popupEntry);
@@ -816,11 +817,16 @@ function mountPopupIframe(popupEntry, url) {
     }, { once: true });
 
     iframe.addEventListener('error', () => {
+        if (popupEntry.iframe !== iframe) return;
         finalizePopupError(popupEntry);
     }, { once: true });
 
     popupEntry.blockedTimeoutTimer = setTimeout(() => {
-        if (popupEntry.state === 'loading') {
+        if (popupEntry.state === 'loading' && popupEntry.iframe === iframe) {
+            if (iframe.parentNode === popupEntry.bodyContainer) {
+                popupEntry.bodyContainer.removeChild(iframe);
+            }
+            popupEntry.iframe = null;
             finalizePopupBlocked(popupEntry);
         }
     }, 12000);
