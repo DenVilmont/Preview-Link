@@ -41,6 +41,10 @@ chrome.runtime.onMessage.addListener((msg, sender) => {
       lastHovers[sender.tab.id] = { url: msg.url, x: msg.x, y: msg.y };
       return;
     }
+    if (msg.action === 'clearHover') {
+      delete lastHovers[sender.tab.id];
+      return;
+    }
     if (msg.action === 'openKeyPreview') {
       const data = lastHovers[sender.tab.id];
       if (data && data.url) {
