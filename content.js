@@ -68,14 +68,11 @@ function onContentMouseMove(e) {
     return;
   }
   const rect = link.getBoundingClientRect();
-  const x = Math.min(window.innerWidth - window.innerWidth / 3, rect.right + 10);
-  const y = Math.min(window.innerHeight - window.innerHeight / 3, rect.top);
+  const localRect = rectToPayload(rect);
   lastHoveredLink = link;
-  lastHoveredX = x;
-  lastHoveredY = y;
   if (lastSentHoverUrl !== link.href) {
     lastSentHoverUrl = link.href;
-    chrome.runtime.sendMessage({ action: 'updateHover', url: link.href, x, y });
+    dispatchPreviewRequest('updateHover', link.href, localRect, null);
   }
   if (interactionType === 'hover') {
     if (hoverTimer) clearTimeout(hoverTimer);
@@ -84,7 +81,7 @@ function onContentMouseMove(e) {
         hoverTimer = null;
         return;
       }
-      requestPreviewOpen(link.href, x, y, 'hover');
+      requestPreviewOpen(link.href, localRect, 'hover');
       lastPreviewedLink = link.href;
       lastPreviewedTime = Date.now();
       hoverTimer = null;
@@ -92,15 +89,113 @@ function onContentMouseMove(e) {
   }
 }
 
-function requestPreviewOpen(url, x, y, trigger) {
+function rectToPayload(rect) {
+  return {
+    rectLeft: rect.left,
+    rectTop: rect.top,
+    rectRight: rect.right,
+    rectBottom: rect.bottom,
+    rectWidth: rect.width,
+    rectHeight: rect.height
+  };
+}
+
+function rectPayloadToAnchor(rectPayload) {
+  const x = Math.min(window.innerWidth - window.innerWidth / 3, rectPayload.rectRight + 10);
+  const y = Math.min(window.innerHeight - window.innerHeight / 3, rectPayload.rectTop);
+  return { x, y };
+}
+
+function requestPreviewOpen(url, rectPayload, trigger) {
   if (!enabled || !url) return;
-  chrome.runtime.sendMessage({
-    action: 'requestPreviewOpen',
-    url,
-    x,
-    y,
-    trigger: trigger || null
-  });
+  dispatchPreviewRequest('requestPreviewOpen', url, rectPayload, trigger || null);
+}
+
+function dispatchPreviewRequest(action, url, rectPayload, trigger) {
+  if (!isRectPayload(rectPayload)) return;
+  if (window.self === window.top) {
+    const { x, y } = rectPayloadToAnchor(rectPayload);
+    chrome.runtime.sendMessage({ action, url, x, y, trigger });
+    return;
+  }
+  window.parent.postMessage(
+    {
+      source: 'link-preview-extension',
+      type: 'preview-coordinate-hop',
+      version: 1,
+      action,
+      url,
+      rect: rectPayload,
+      trigger: trigger || null
+    },
+    '*'
+  );
+}
+
+function isRectPayload(rect) {
+  if (!rect || typeof rect !== 'object') return false;
+  const keys = ['rectLeft', 'rectTop', 'rectRight', 'rectBottom', 'rectWidth', 'rectHeight'];
+  return keys.every((key) => typeof rect[key] === 'number' && Number.isFinite(rect[key]));
+}
+
+function isDirectChildWindow(sourceWindow) {
+  if (!sourceWindow || sourceWindow === window) return false;
+  for (let i = 0; i < window.frames.length; i += 1) {
+    if (window.frames[i] === sourceWindow) return true;
+  }
+  return false;
+}
+
+function addFrameOffsetToRect(rect, frameRect) {
+  return {
+    rectLeft: rect.rectLeft + frameRect.left,
+    rectTop: rect.rectTop + frameRect.top,
+    rectRight: rect.rectRight + frameRect.left,
+    rectBottom: rect.rectBottom + frameRect.top,
+    rectWidth: rect.rectWidth,
+    rectHeight: rect.rectHeight
+  };
+}
+
+function onCoordinateHopMessage(event) {
+  if (!enabled) return;
+  const data = event && event.data;
+  if (!data || typeof data !== 'object') return;
+  if (data.source !== 'link-preview-extension' || data.type !== 'preview-coordinate-hop' || data.version !== 1) return;
+  if (!isDirectChildWindow(event.source)) return;
+  if (!data.url || !isRectPayload(data.rect)) return;
+  if (data.action !== 'updateHover' && data.action !== 'requestPreviewOpen') return;
+
+  let rect = data.rect;
+  if (window.self !== window.top && window.frameElement) {
+    const frameRect = window.frameElement.getBoundingClientRect();
+    rect = addFrameOffsetToRect(rect, frameRect);
+  }
+
+  if (window.self === window.top) {
+    const { x, y } = rectPayloadToAnchor(rect);
+    chrome.runtime.sendMessage({
+      action: data.action,
+      url: data.url,
+      x,
+      y,
+      trigger: data.trigger || null
+    });
+    return;
+  }
+
+  window.parent.postMessage(
+    {
+      source: 'link-preview-extension',
+      type: 'preview-coordinate-hop',
+      version: 1,
+      action: data.action,
+      url: data.url,
+      rect,
+      trigger: data.trigger || null
+    },
+    '*'
+  );
 }
 
 function onContentKeyDown(e) {
@@ -146,6 +241,7 @@ function attachListeners() {
   document.addEventListener('mousemove', onContentMouseMove);
   document.addEventListener('keydown', onContentKeyDown);
   chrome.runtime.onMessage.addListener(handleRuntimeMessage);
+  window.addEventListener('message', onCoordinateHopMessage);
   listenersAttached = true;
 }
 
@@ -154,6 +250,7 @@ function detachListeners() {
   document.removeEventListener('mousemove', onContentMouseMove);
   document.removeEventListener('keydown', onContentKeyDown);
   chrome.runtime.onMessage.removeListener(handleRuntimeMessage);
+  window.removeEventListener('message', onCoordinateHopMessage);
   listenersAttached = false;
 }
 
@@ -401,8 +498,6 @@ function simulateLoadingBar(popupEntry) {
 
 // Track last hovered link and its position
 let lastHoveredLink = null;
-let lastHoveredX = 0;
-let lastHoveredY = 0;
 // Variable to dedupe hover update messages for openKeyPreview
 let lastSentHoverUrl = null;
 
