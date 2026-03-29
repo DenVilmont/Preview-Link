@@ -1,6 +1,7 @@
 // content.js
 let popups = [];
 let MAX_POPUPS = 2;
+let popupIdCounter = 0;
 // Hover delay before opening popup (ms)
 let hoverDelay = 2000;
 let hoverTimer = null;
@@ -119,7 +120,10 @@ function handleRuntimeMessage(msg) {
       createPopup(msg.url, msg.x, msg.y);
       break;
     case 'bringToFront':
-      bringToFront(msg.url);
+      bringToFront(msg.popupId, msg.url);
+      break;
+    case 'updatePopupUrl':
+      syncPopupCurrentUrl(msg.popupId, msg.url);
       break;
     default:
       break;
@@ -152,7 +156,7 @@ chrome.storage.onChanged.addListener((changes, area) => {
       attachListeners();
     } else {
       detachListeners();
-      popups.slice().forEach((p) => closePopup(p.popup));
+      popups.slice().forEach((p) => closePopup(p.popupId));
       popups = [];
     }
   }
@@ -179,7 +183,22 @@ function createPopup(url, x, y) {
     // Limit to max popups: do not open new ones when limit reached
     if (popups.length >= MAX_POPUPS) return;
     // Prevent opening the same link multiple times
-    if (popups.some(p => p.url === url)) return;
+    if (popups.some(p => p.requestedUrl === url || p.currentUrl === url)) return;
+
+    const popupId = `popup-${++popupIdCounter}`;
+    const popupEntry = {
+        popupId,
+        requestedUrl: url,
+        currentUrl: url,
+        state: 'loading',
+        popup: null,
+        topBar: null,
+        bodyContainer: null,
+        iframe: null,
+        loadingBar: null,
+        x,
+        y
+    };
 
     let popup = document.createElement('div');
     // Assign initial stacking order
@@ -207,14 +226,15 @@ function createPopup(url, x, y) {
     let loadingBar = document.createElement('div');
     loadingBar.className = 'link-preview-loading-bar';
     bodyContainer.appendChild(loadingBar);
+    popupEntry.loadingBar = loadingBar;
 
     // New tab button
     let newTabBtn = document.createElement('button');
     newTabBtn.className = 'link-preview-newtab';
     newTabBtn.innerText = '↗';
     newTabBtn.onclick = () => {
-        window.open(url, '_blank');
-        closePopup(popup);
+        window.open(popupEntry.currentUrl || popupEntry.requestedUrl, '_blank');
+        closePopup(popupEntry.popupId);
     };
     topBar.appendChild(newTabBtn);
 
@@ -223,28 +243,7 @@ function createPopup(url, x, y) {
     reloadBtn.className = 'link-preview-reload';
     reloadBtn.innerText = '⟳';
     reloadBtn.onclick = () => {
-        // Restart loading bar simulation on reload
-        simulateLoadingBar(loadingBar, iframe);
-        // Replace iframe element to force reload even on cross-origin
-        const currentUrl = iframe.src;
-        // Remove old iframe
-        bodyContainer.removeChild(iframe);
-        // Create and insert new iframe
-        const newIframe = document.createElement('iframe');
-        newIframe.className = 'link-preview-iframe';
-        newIframe.src = currentUrl;
-        // Reattach load and error handlers
-        newIframe.onload = () => {
-            loadingBar.style.width = '100%';
-            setTimeout(() => loadingBar.style.opacity = '0', 500);
-        };
-        newIframe.onerror = () => {
-            loadingBar.style.background = 'red';
-        };
-        // Insert new iframe before resize handle
-        bodyContainer.insertBefore(newIframe, handle);
-        // Update reference
-        iframe = newIframe;
+        reloadPopup(popupEntry.popupId);
     };
     topBar.appendChild(reloadBtn);
 
@@ -252,27 +251,26 @@ function createPopup(url, x, y) {
     let closeBtn = document.createElement('button');
     closeBtn.className = 'link-preview-close';
     closeBtn.innerText = '✖';
-    closeBtn.onclick = () => closePopup(popup);
+    closeBtn.onclick = () => closePopup(popupEntry.popupId);
     topBar.appendChild(closeBtn);
 
     // Iframe element
     iframe = document.createElement('iframe');
     iframe.className = 'link-preview-iframe';
+    iframe.dataset.popupId = popupId;
     iframe.src = url;
-    iframe.onload = () => {
-        loadingBar.style.width = '100%';
-        setTimeout(() => loadingBar.style.opacity = '0', 500);
-    };
-    iframe.onerror = () => {
-        loadingBar.style.background = 'red';
-    };
+    popupEntry.iframe = iframe;
+    bindIframeStateHandlers(popupEntry);
     bodyContainer.appendChild(iframe);
 
     document.body.appendChild(popup);
+    popupEntry.popup = popup;
+    popupEntry.topBar = topBar;
+    popupEntry.bodyContainer = bodyContainer;
     // Bring this popup to front when clicking on its container (including top bar)
-    popup.addEventListener('mousedown', () => bringToFront(url));
+    popup.addEventListener('mousedown', () => bringToFront(popupEntry.popupId));
     setTimeout(() => { popup.style.opacity = '1'; }, 10);
-    simulateLoadingBar(loadingBar, iframe);
+    simulateLoadingBar(popupEntry);
 
     // Make popup draggable via the top bar
     topBar.addEventListener('mousedown', function(e) {
@@ -294,8 +292,8 @@ function createPopup(url, x, y) {
             newTop = Math.max(0, Math.min(newTop, window.innerHeight - popup.offsetHeight));
             popup.style.left = newLeft + 'px';
             popup.style.top = newTop + 'px';
-            const entry = popups.find(p => p.popup === popup);
-            if (entry) { entry.x = newLeft; entry.y = newTop; }
+            popupEntry.x = newLeft;
+            popupEntry.y = newTop;
         }
         function onMouseUp() {
             document.removeEventListener('mousemove', onMouseMove);
@@ -317,7 +315,7 @@ function createPopup(url, x, y) {
         e.stopPropagation();
         document.body.style.userSelect = 'none';
         // Disable pointer-events for iframe
-        iframe.style.pointerEvents = 'none';
+        popupEntry.iframe.style.pointerEvents = 'none';
         const startX = e.clientX;
         const startY = e.clientY;
         const startWidth = popup.offsetWidth;
@@ -337,7 +335,7 @@ function createPopup(url, x, y) {
             document.removeEventListener('mousemove', onMouseMove);
             document.removeEventListener('mouseup', onMouseUp);
             // Restore pointer-events and text selection after resize
-            iframe.style.pointerEvents = '';
+            popupEntry.iframe.style.pointerEvents = '';
             document.body.style.userSelect = '';
         }
         document.addEventListener('mousemove', onMouseMove);
@@ -345,19 +343,22 @@ function createPopup(url, x, y) {
     });
 
     // Store popup reference with position
-    popups.push({popup, url, x, y, closePopup: () => closePopup(popup)});
+    popups.push(popupEntry);
 }
 
-function closePopup(popup) {
-    if (!popup) return;
-    popup.style.opacity = '0';
+function closePopup(popupId) {
+    const entry = getPopupById(popupId);
+    if (!entry || !entry.popup) return;
+    entry.popup.style.opacity = '0';
     setTimeout(() => {
-        popup.remove();
-        popups = popups.filter(p => p.popup !== popup);
+        if (entry.popup) entry.popup.remove();
+        popups = popups.filter(p => p.popupId !== popupId);
     }, 300);
 }
 
-function simulateLoadingBar(loadingBar, iframe) {
+function simulateLoadingBar(popupEntry) {
+    const loadingBar = popupEntry.loadingBar;
+    const iframe = popupEntry.iframe;
     if (!loadingBar) return;
     loadingBar.style.width = '0%';
     loadingBar.style.opacity = '1';
@@ -368,9 +369,15 @@ function simulateLoadingBar(loadingBar, iframe) {
         progress += Math.random() * 10;
         if (progress > 90) progress = 90;
         loadingBar.style.width = progress + '%';
-        if (progress < 90 && !iframe.complete) setTimeout(step, 80);
+        if (progress < 90 && loading) setTimeout(step, 80);
     }
-    iframe.onload = () => { loading = false; loadingBar.style.width = '100%'; setTimeout(() => loadingBar.style.opacity = '0', 500); };
+    const stopLoading = () => {
+        loading = false;
+        loadingBar.style.width = '100%';
+        setTimeout(() => loadingBar.style.opacity = '0', 500);
+    };
+    iframe.addEventListener('load', stopLoading, { once: true });
+    iframe.addEventListener('error', () => { loading = false; }, { once: true });
     step();
 }
 
@@ -386,9 +393,57 @@ let lastPreviewedLink = null;
 let lastPreviewedTime = 0;
 
 // Bring popup to front when requested: move it atop other popups
-function bringToFront(url) {
-    const entry = popups.find(p => p.url === url);
+function bringToFront(popupId, urlFallback) {
+    let entry = popupId ? getPopupById(popupId) : null;
+    if (!entry && urlFallback) {
+        entry = popups.find(p => p.currentUrl === urlFallback || p.requestedUrl === urlFallback);
+    }
     if (entry) {
         entry.popup.style.zIndex = ++zIndexCounter;
     }
+}
+
+function getPopupById(popupId) {
+    return popups.find(p => p.popupId === popupId);
+}
+
+function bindIframeStateHandlers(popupEntry) {
+    const { iframe, loadingBar } = popupEntry;
+    iframe.onload = () => {
+        const loadedUrl = iframe.src || popupEntry.currentUrl;
+        popupEntry.currentUrl = loadedUrl;
+        const isBlockedAboutBlank = loadedUrl === 'about:blank' && popupEntry.requestedUrl !== 'about:blank';
+        popupEntry.state = isBlockedAboutBlank ? 'blocked' : 'ready';
+        loadingBar.style.width = '100%';
+        setTimeout(() => loadingBar.style.opacity = '0', 500);
+    };
+    iframe.onerror = () => {
+        popupEntry.state = 'error';
+        loadingBar.style.background = 'red';
+    };
+}
+
+function reloadPopup(popupId) {
+    const entry = getPopupById(popupId);
+    if (!entry || !entry.iframe || !entry.bodyContainer) return;
+    entry.state = 'loading';
+    if (entry.loadingBar) {
+        entry.loadingBar.style.background = '';
+    }
+    const reloadUrl = entry.currentUrl || entry.requestedUrl;
+    const newIframe = document.createElement('iframe');
+    newIframe.className = 'link-preview-iframe';
+    newIframe.dataset.popupId = entry.popupId;
+    newIframe.src = reloadUrl;
+    entry.bodyContainer.replaceChild(newIframe, entry.iframe);
+    entry.iframe = newIframe;
+    bindIframeStateHandlers(entry);
+    simulateLoadingBar(entry);
+}
+
+function syncPopupCurrentUrl(popupId, currentUrl) {
+    if (!popupId || !currentUrl) return;
+    const entry = getPopupById(popupId);
+    if (!entry) return;
+    entry.currentUrl = currentUrl;
 }

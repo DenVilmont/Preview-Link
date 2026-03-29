@@ -49,11 +49,23 @@ chrome.runtime.onMessage.addListener((msg, sender) => {
       return;
     }
     if (msg.action === 'bringToFront') {
-      chrome.tabs.sendMessage(sender.tab.id, { action: 'bringToFront', url: msg.url });
+      chrome.tabs.sendMessage(sender.tab.id, {
+        action: 'bringToFront',
+        popupId: msg.popupId || null,
+        url: msg.url
+      });
       return;
     }
     if (msg.action === 'showPreview') {
       chrome.tabs.sendMessage(sender.tab.id, msg);
+      return;
+    }
+    if (msg.action === 'updatePopupUrl') {
+      chrome.tabs.sendMessage(sender.tab.id, {
+        action: 'updatePopupUrl',
+        popupId: msg.popupId || null,
+        url: msg.url
+      });
     }
   }
 }); 

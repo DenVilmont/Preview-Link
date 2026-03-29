@@ -10,14 +10,25 @@ chrome.storage.onChanged.addListener((changes, area) => {
   }
 });
 if (window.self !== window.top) {
-  document.addEventListener('click', e => {
+  function sendPopupUrlUpdate() {
     if (!iframeEnabled) return;
-    const link = e.target.closest('a');
-    if (link && link.href) {
-      window.open(link.href, '_blank');
-      e.preventDefault();
-    }
-  });
+    const popupId = window.frameElement && window.frameElement.dataset
+      ? window.frameElement.dataset.popupId
+      : null;
+    if (!popupId) return;
+    chrome.runtime.sendMessage({
+      action: 'updatePopupUrl',
+      popupId,
+      url: window.location.href
+    });
+  }
+
+  if (document.readyState === 'complete') {
+    sendPopupUrlUpdate();
+  } else {
+    window.addEventListener('load', sendPopupUrlUpdate, { once: true });
+  }
+
   // Handle wheel events within iframe: allow native smooth scrolling and prevent propagation to host
   document.addEventListener('wheel', e => {
     if (!iframeEnabled) return;
@@ -28,6 +39,9 @@ if (window.self !== window.top) {
   // Bring this popup to front when clicking inside its iframe
   document.addEventListener('mousedown', () => {
     if (!iframeEnabled) return;
-    chrome.runtime.sendMessage({ action: 'bringToFront', url: window.location.href });
+    const popupId = window.frameElement && window.frameElement.dataset
+      ? window.frameElement.dataset.popupId
+      : null;
+    chrome.runtime.sendMessage({ action: 'bringToFront', popupId, url: window.location.href });
   });
 }
