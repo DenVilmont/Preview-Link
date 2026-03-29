@@ -10,14 +10,6 @@ chrome.storage.onChanged.addListener((changes, area) => {
   }
 });
 if (window.self !== window.top) {
-  document.addEventListener('click', e => {
-    if (!iframeEnabled) return;
-    const link = e.target.closest('a');
-    if (link && link.href) {
-      window.open(link.href, '_blank');
-      e.preventDefault();
-    }
-  });
   // Handle wheel events within iframe: allow native smooth scrolling and prevent propagation to host
   document.addEventListener('wheel', e => {
     if (!iframeEnabled) return;
