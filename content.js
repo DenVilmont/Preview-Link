@@ -925,14 +925,12 @@ function bringToFront(popupId, urlFallback) {
 function flashPopupAttention(popupEntry) {
     if (!popupEntry || !popupEntry.popup) return;
     const popup = popupEntry.popup;
-    popup.style.transition = 'box-shadow 0.2s ease, border-color 0.2s ease, opacity 0.3s';
-    popup.style.borderColor = '#ffd24d';
-    popup.style.boxShadow = '0 0 0 4px rgba(255, 210, 77, 0.55), 0 8px 32px rgba(0,0,0,0.25)';
+    popup.classList.remove('link-preview-popup--attention');
+    void popup.offsetWidth;
+    popup.classList.add('link-preview-popup--attention');
     clearTimeout(popupEntry.attentionTimer);
     popupEntry.attentionTimer = setTimeout(() => {
-        popup.style.borderColor = '';
-        popup.style.boxShadow = '';
-        popup.style.transition = 'opacity 0.3s, transform 0.3s';
+        popup.classList.remove('link-preview-popup--attention');
         popupEntry.attentionTimer = null;
     }, 350);
 }
