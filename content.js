@@ -10,6 +10,14 @@ let enabled = true;
 let interactionType = 'hover';
 let triggerKey = '';
 let listenersAttached = false;
+const DEBUG_PREVIEW = false;
+const ORIGINAL_LIVENESS_GRACE_MS = 1000;
+const POPUP_HARD_TIMEOUT_MS = 12000;
+
+function logPreviewDebug(event, details) {
+  if (!DEBUG_PREVIEW) return;
+  console.debug('[link-preview]', event, details);
+}
 
 function normalizeInteractionType(value) {
   if (value === 'button') return 'hoverWithKey';
@@ -365,6 +373,7 @@ function handleRuntimeMessage(msg) {
     case 'updatePopupUrl':
       syncPopupCurrentUrl(msg.popupId, msg.url, msg.attemptId || null);
       break;
+    case 'previewFrameAlive':
     case 'previewRuntimeReady':
       markPopupRuntimeReady(msg.popupId, msg.attemptId, msg.url || null);
       break;
@@ -386,6 +395,10 @@ function onPopupRuntimeMessage(event) {
   }
   if (data.action === 'updatePopupUrl') {
     syncPopupCurrentUrl(data.popupId || null, data.url, data.attemptId || null);
+    return;
+  }
+  if (data.action === 'previewFrameAlive') {
+    markPopupRuntimeReady(data.popupId || null, data.attemptId || null, data.url || null);
     return;
   }
   if (data.action === 'previewRuntimeReady') {
@@ -683,6 +696,8 @@ function createPopup(url, x, y, anchorRect) {
         loadingAnimationTimer: null,
         blockedTimeoutTimer: null,
         postLoadGraceTimer: null,
+        activeCandidateLoaded: false,
+        activeCandidateFrameAlive: false,
         attentionTimer: null,
         x,
         y
@@ -979,14 +994,40 @@ function getLoadedIframeUrl(popupEntry, iframe) {
     return iframe.src || popupEntry.currentUrl || popupEntry.requestedUrl;
 }
 
+function getActiveCandidateState(popupEntry) {
+    const candidateIndex = popupEntry.activeCandidateIndex;
+    const totalCandidates = popupEntry.previewCandidates.length;
+    return {
+        candidateIndex,
+        totalCandidates,
+        hasAlternate: totalCandidates > 1,
+        isOriginalCandidate: candidateIndex === 0,
+        isAlternateCandidate: candidateIndex > 0,
+        requiresFrameLiveness: candidateIndex === 0 && totalCandidates === 1
+    };
+}
+
 function finalizePopupReady(popupEntry, iframe) {
     popupEntry.currentUrl = getLoadedIframeUrl(popupEntry, iframe);
     popupEntry.currentPreviewUrl = popupEntry.previewCandidates[popupEntry.activeCandidateIndex] || popupEntry.currentPreviewUrl;
     popupEntry.state = 'ready';
+    logPreviewDebug('finalize ready', {
+        popupId: popupEntry.popupId,
+        attemptId: popupEntry.activeAttemptId,
+        candidateIndex: popupEntry.activeCandidateIndex,
+        url: popupEntry.currentPreviewUrl
+    });
     finishPopupLoadingState(popupEntry);
 }
 
 function finalizePopupBlocked(popupEntry, message) {
+    logPreviewDebug('finalize blocked', {
+        popupId: popupEntry.popupId,
+        attemptId: popupEntry.activeAttemptId,
+        candidateIndex: popupEntry.activeCandidateIndex,
+        url: popupEntry.currentPreviewUrl,
+        message: message || 'This page cannot be shown in an embedded preview.'
+    });
     finishPopupLoadingState(popupEntry);
     clearPopupBodyContent(popupEntry);
     renderPopupFallback(
@@ -996,12 +1037,35 @@ function finalizePopupBlocked(popupEntry, message) {
     );
 }
 
-function failActiveCandidate(popupEntry, attemptId, reason) {
-    if (!popupEntry || popupEntry.activeAttemptId !== attemptId || popupEntry.state !== 'loading') return;
+function advanceToNextCandidate(popupEntry, attemptId) {
+    if (!popupEntry || popupEntry.activeAttemptId !== attemptId || popupEntry.state !== 'loading') return false;
     clearPopupLoadLifecycle(popupEntry);
     popupEntry.activeCandidateIndex += 1;
     if (popupEntry.activeCandidateIndex < popupEntry.previewCandidates.length) {
         mountPopupIframe(popupEntry, popupEntry.previewCandidates[popupEntry.activeCandidateIndex]);
+        return true;
+    }
+    return false;
+}
+
+function failActiveCandidate(popupEntry, attemptId, reason) {
+    if (!popupEntry || popupEntry.activeAttemptId !== attemptId || popupEntry.state !== 'loading') return;
+    if (reason === 'error') {
+        logPreviewDebug('iframe error', {
+            popupId: popupEntry.popupId,
+            attemptId,
+            candidateIndex: popupEntry.activeCandidateIndex,
+            url: popupEntry.currentPreviewUrl
+        });
+    } else if (reason === 'timeout') {
+        logPreviewDebug('hard timeout', {
+            popupId: popupEntry.popupId,
+            attemptId,
+            candidateIndex: popupEntry.activeCandidateIndex,
+            url: popupEntry.currentPreviewUrl
+        });
+    }
+    if (advanceToNextCandidate(popupEntry, attemptId)) {
         return;
     }
     const message = reason === 'error'
@@ -1016,6 +1080,16 @@ function mountPopupIframe(popupEntry, url) {
     popupEntry.currentUrl = url;
     const attemptId = popupEntry.activeAttemptId + 1;
     popupEntry.activeAttemptId = attemptId;
+    popupEntry.activeCandidateLoaded = false;
+    popupEntry.activeCandidateFrameAlive = false;
+    const candidateState = getActiveCandidateState(popupEntry);
+    logPreviewDebug('candidate mount', {
+        popupId: popupEntry.popupId,
+        attemptId,
+        candidateIndex: candidateState.candidateIndex,
+        totalCandidates: candidateState.totalCandidates,
+        url
+    });
 
     const iframe = document.createElement('iframe');
     iframe.className = 'link-preview-iframe';
@@ -1027,9 +1101,36 @@ function mountPopupIframe(popupEntry, url) {
 
     iframe.addEventListener('load', () => {
         if (popupEntry.iframe !== iframe || popupEntry.activeAttemptId !== attemptId) return;
-        popupEntry.postLoadGraceTimer = setTimeout(() => {
-            failActiveCandidate(popupEntry, attemptId, 'no-handshake-after-load');
-        }, 1000);
+        const activeCandidateState = getActiveCandidateState(popupEntry);
+        popupEntry.activeCandidateLoaded = true;
+        logPreviewDebug('iframe load', {
+            popupId: popupEntry.popupId,
+            attemptId,
+            candidateIndex: activeCandidateState.candidateIndex,
+            totalCandidates: activeCandidateState.totalCandidates,
+            url: popupEntry.currentPreviewUrl
+        });
+        if (activeCandidateState.isOriginalCandidate && activeCandidateState.hasAlternate) {
+            logPreviewDebug('quick failover from original to alternate', {
+                popupId: popupEntry.popupId,
+                attemptId,
+                candidateIndex: activeCandidateState.candidateIndex,
+                url: popupEntry.currentPreviewUrl
+            });
+            advanceToNextCandidate(popupEntry, attemptId);
+            return;
+        }
+        if (activeCandidateState.requiresFrameLiveness) {
+            if (popupEntry.activeCandidateFrameAlive) {
+                finalizePopupReady(popupEntry, iframe);
+                return;
+            }
+            popupEntry.postLoadGraceTimer = setTimeout(() => {
+                failActiveCandidate(popupEntry, attemptId, 'no-frame-liveness-after-load');
+            }, ORIGINAL_LIVENESS_GRACE_MS);
+            return;
+        }
+        finalizePopupReady(popupEntry, iframe);
     }, { once: true });
 
     iframe.addEventListener('error', () => {
@@ -1039,7 +1140,7 @@ function mountPopupIframe(popupEntry, url) {
 
     popupEntry.blockedTimeoutTimer = setTimeout(() => {
         failActiveCandidate(popupEntry, attemptId, 'timeout');
-    }, 12000);
+    }, POPUP_HARD_TIMEOUT_MS);
 }
 
 function loadPopupUrl(popupEntry, url, options = {}) {
@@ -1103,11 +1204,29 @@ function syncPopupCurrentUrl(popupId, currentUrl, attemptId) {
     entry.currentUrl = currentUrl;
 }
 
-function markPopupRuntimeReady(popupId, attemptId, currentUrl) {
+function markPopupFrameAlive(popupId, attemptId, currentUrl) {
     if (!popupId || !attemptId) return;
     const entry = getPopupById(popupId);
-    if (!entry || Number(attemptId) !== entry.activeAttemptId || entry.state !== 'loading') return;
-    if (!entry.iframe) return;
+    if (!entry || Number(attemptId) !== entry.activeAttemptId) return;
     if (currentUrl) entry.currentUrl = currentUrl;
+    if (!entry.activeCandidateFrameAlive) {
+        entry.activeCandidateFrameAlive = true;
+        const candidateState = getActiveCandidateState(entry);
+        if (candidateState.requiresFrameLiveness) {
+            logPreviewDebug('original/no-alternate liveness confirmation', {
+                popupId: entry.popupId,
+                attemptId: Number(attemptId),
+                candidateIndex: candidateState.candidateIndex,
+                url: entry.currentPreviewUrl
+            });
+        }
+    }
+    const candidateState = getActiveCandidateState(entry);
+    if (!candidateState.requiresFrameLiveness || entry.state !== 'loading' || !entry.activeCandidateLoaded) return;
+    if (!entry.iframe) return;
     finalizePopupReady(entry, entry.iframe);
+}
+
+function markPopupRuntimeReady(popupId, attemptId, currentUrl) {
+    markPopupFrameAlive(popupId, attemptId, currentUrl);
 }
