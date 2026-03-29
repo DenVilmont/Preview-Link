@@ -81,6 +81,38 @@ function resetHoverInteraction() {
   hoverInteraction.keyEligible = false;
 }
 
+function dispatchHoverClear() {
+  if (window.self === window.top) {
+    chrome.runtime.sendMessage({ action: 'clearHover' });
+    return;
+  }
+  window.parent.postMessage(
+    {
+      source: 'link-preview-extension',
+      type: 'preview-coordinate-hop',
+      version: 1,
+      action: 'clearHover'
+    },
+    '*'
+  );
+}
+
+function dispatchKeyPreviewOpen() {
+  if (window.self === window.top) {
+    chrome.runtime.sendMessage({ action: 'openKeyPreview' });
+    return;
+  }
+  window.parent.postMessage(
+    {
+      source: 'link-preview-extension',
+      type: 'preview-coordinate-hop',
+      version: 1,
+      action: 'triggerKeyPreviewOpen'
+    },
+    '*'
+  );
+}
+
 function isEligibleAnchor(link) {
   return !!(link && link.href && link.offsetWidth > 0 && link.offsetHeight > 0);
 }
@@ -129,6 +161,7 @@ function onContentPointerOut(e) {
   const exitedLink = e.target.closest('a[href]');
   if (exitedLink !== hoverInteraction.activeLink) return;
   if (e.relatedTarget && hoverInteraction.activeLink.contains(e.relatedTarget)) return;
+  dispatchHoverClear();
   resetHoverInteraction();
 }
 
@@ -206,6 +239,22 @@ function onCoordinateHopMessage(event) {
   if (!data || typeof data !== 'object') return;
   if (data.source !== 'link-preview-extension' || data.type !== 'preview-coordinate-hop' || data.version !== 1) return;
   if (!isDirectChildWindow(event.source)) return;
+  if (data.action === 'triggerKeyPreviewOpen') {
+    if (window.self === window.top) {
+      chrome.runtime.sendMessage({ action: 'openKeyPreview' });
+      return;
+    }
+    window.parent.postMessage(data, '*');
+    return;
+  }
+  if (data.action === 'clearHover') {
+    if (window.self === window.top) {
+      chrome.runtime.sendMessage({ action: 'clearHover' });
+      return;
+    }
+    window.parent.postMessage(data, '*');
+    return;
+  }
   if (!data.url || !isRectPayload(data.rect)) return;
   if (data.action !== 'updateHover' && data.action !== 'requestPreviewOpen') return;
 
@@ -245,15 +294,15 @@ function onContentKeyDown(e) {
   if (!enabled) return;
   if (interactionType === 'hover') return;
   if (interactionType === 'hoverWithKey') {
-    if (triggerKey && e.code === triggerKey && hoverInteraction.keyEligible && hoverInteraction.activeUrl) {
-      chrome.runtime.sendMessage({ action: 'openKeyPreview' });
+    if (triggerKey && e.code === triggerKey) {
+      dispatchKeyPreviewOpen();
     }
     return;
   }
 
   const modKey = interactionType + 'Key';
   if (e[modKey]) {
-    chrome.runtime.sendMessage({ action: 'openKeyPreview' });
+    dispatchKeyPreviewOpen();
   }
 }
 
@@ -296,6 +345,7 @@ function detachListeners() {
   document.removeEventListener('keydown', onContentKeyDown);
   chrome.runtime.onMessage.removeListener(handleRuntimeMessage);
   window.removeEventListener('message', onCoordinateHopMessage);
+  dispatchHoverClear();
   resetHoverInteraction();
   listenersAttached = false;
 }
@@ -321,6 +371,7 @@ chrome.storage.onChanged.addListener((changes, area) => {
     hoverDelay = changes.hoverDelay.newValue;
   }
   if (changes.interactionType) {
+    dispatchHoverClear();
     interactionType = normalizeInteractionType(changes.interactionType.newValue);
     resetHoverInteraction();
   }
