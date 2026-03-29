@@ -1047,6 +1047,7 @@ function loadPopupUrl(popupEntry, url, options = {}) {
     const { preserveCandidateIndex = false } = options;
     popupEntry.requestedUrl = url;
     popupEntry.originalUrl = url;
+    popupEntry.previewIdentityKey = getPreviewIdentityKey(url);
     popupEntry.previewCandidates = buildPreviewCandidates(url);
     popupEntry.activeCandidateIndex = preserveCandidateIndex
         ? Math.min(popupEntry.activeCandidateIndex, popupEntry.previewCandidates.length - 1)
