@@ -38,7 +38,7 @@ let lastHovers = {};
 chrome.runtime.onMessage.addListener((msg, sender) => {
   if (sender.tab && sender.tab.id >= 0) {
     if (msg.action === 'updateHover') {
-      lastHovers[sender.tab.id] = { url: msg.url, x: msg.x, y: msg.y };
+      lastHovers[sender.tab.id] = { url: msg.url, x: msg.x, y: msg.y, rect: msg.rect || null };
       return;
     }
     if (msg.action === 'clearHover') {
@@ -48,7 +48,7 @@ chrome.runtime.onMessage.addListener((msg, sender) => {
     if (msg.action === 'openKeyPreview') {
       const data = lastHovers[sender.tab.id];
       if (data && data.url) {
-        chrome.tabs.sendMessage(sender.tab.id, { action: 'requestPreviewOpen', url: data.url, x: data.x, y: data.y, trigger: 'key' });
+        chrome.tabs.sendMessage(sender.tab.id, { action: 'requestPreviewOpen', url: data.url, x: data.x, y: data.y, rect: data.rect || null, trigger: 'key' });
       }
       return;
     }
@@ -66,6 +66,7 @@ chrome.runtime.onMessage.addListener((msg, sender) => {
         url: msg.url,
         x: msg.x,
         y: msg.y,
+        rect: msg.rect || null,
         trigger: msg.trigger || null
       });
       return;
