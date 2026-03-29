@@ -97,6 +97,22 @@ function dispatchHoverClear() {
   );
 }
 
+function dispatchKeyPreviewOpen() {
+  if (window.self === window.top) {
+    chrome.runtime.sendMessage({ action: 'openKeyPreview' });
+    return;
+  }
+  window.parent.postMessage(
+    {
+      source: 'link-preview-extension',
+      type: 'preview-coordinate-hop',
+      version: 1,
+      action: 'triggerKeyPreviewOpen'
+    },
+    '*'
+  );
+}
+
 function isEligibleAnchor(link) {
   return !!(link && link.href && link.offsetWidth > 0 && link.offsetHeight > 0);
 }
@@ -223,6 +239,14 @@ function onCoordinateHopMessage(event) {
   if (!data || typeof data !== 'object') return;
   if (data.source !== 'link-preview-extension' || data.type !== 'preview-coordinate-hop' || data.version !== 1) return;
   if (!isDirectChildWindow(event.source)) return;
+  if (data.action === 'triggerKeyPreviewOpen') {
+    if (window.self === window.top) {
+      chrome.runtime.sendMessage({ action: 'openKeyPreview' });
+      return;
+    }
+    window.parent.postMessage(data, '*');
+    return;
+  }
   if (data.action === 'clearHover') {
     if (window.self === window.top) {
       chrome.runtime.sendMessage({ action: 'clearHover' });
@@ -271,14 +295,14 @@ function onContentKeyDown(e) {
   if (interactionType === 'hover') return;
   if (interactionType === 'hoverWithKey') {
     if (triggerKey && e.code === triggerKey) {
-      chrome.runtime.sendMessage({ action: 'openKeyPreview' });
+      dispatchKeyPreviewOpen();
     }
     return;
   }
 
   const modKey = interactionType + 'Key';
   if (e[modKey]) {
-    chrome.runtime.sendMessage({ action: 'openKeyPreview' });
+    dispatchKeyPreviewOpen();
   }
 }
 
