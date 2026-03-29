@@ -68,8 +68,8 @@ icons/
 ### 1. Clone the repository
 
 ```bash
-git clone <your-repository-url>
-cd preview-link
+git clone https://github.com/DenVilmont/Preview-Link.git
+cd Preview-Link
 ```
 
 ### 2. Load the extension in Chrome
@@ -155,6 +155,3 @@ The main development priorities are:
 * low-friction settings and UX
 * minimal unnecessary complexity
 
-## License
-
-Add your license here.
