@@ -363,7 +363,10 @@ function handleRuntimeMessage(msg) {
       bringToFront(msg.popupId, msg.url);
       break;
     case 'updatePopupUrl':
-      syncPopupCurrentUrl(msg.popupId, msg.url);
+      syncPopupCurrentUrl(msg.popupId, msg.url, msg.attemptId || null);
+      break;
+    case 'previewRuntimeReady':
+      markPopupRuntimeReady(msg.popupId, msg.attemptId, msg.url || null);
       break;
     default:
       break;
@@ -382,7 +385,11 @@ function onPopupRuntimeMessage(event) {
     return;
   }
   if (data.action === 'updatePopupUrl') {
-    syncPopupCurrentUrl(data.popupId || null, data.url);
+    syncPopupCurrentUrl(data.popupId || null, data.url, data.attemptId || null);
+    return;
+  }
+  if (data.action === 'previewRuntimeReady') {
+    markPopupRuntimeReady(data.popupId || null, data.attemptId || null, data.url || null);
   }
 }
 
@@ -522,8 +529,128 @@ function calculatePopupPosition(anchorRect, popupWidth, popupHeight) {
     return { x, y };
 }
 
+function extractYouTubeVideoId(url) {
+    const host = url.hostname.toLowerCase();
+    const pathname = url.pathname || '';
+    if (host === 'youtu.be') {
+        const firstSegment = pathname.split('/').filter(Boolean)[0];
+        return firstSegment || null;
+    }
+    if (host === 'www.youtube.com' || host === 'youtube.com' || host === 'm.youtube.com') {
+        if (pathname === '/watch') {
+            return url.searchParams.get('v') || null;
+        }
+        const parts = pathname.split('/').filter(Boolean);
+        if (parts[0] === 'shorts' || parts[0] === 'live') {
+            return parts[1] || null;
+        }
+    }
+    return null;
+}
+
+function buildRutubeEmbedUrl(videoId, sourceUrl) {
+    const embedUrl = new URL(`https://rutube.ru/play/embed/${videoId}`);
+    const safeParams = ['p', 'play', 'access_token', 'token'];
+    safeParams.forEach((param) => {
+        const value = sourceUrl.searchParams.get(param);
+        if (value) embedUrl.searchParams.set(param, value);
+    });
+    return embedUrl.toString();
+}
+
+function resolveAlternatePreviewUrl(originalUrl) {
+    let parsed;
+    try {
+        parsed = new URL(originalUrl);
+    } catch (_) {
+        return null;
+    }
+
+    const host = parsed.hostname.toLowerCase();
+    const pathname = parsed.pathname || '';
+
+    const ytVideoId = extractYouTubeVideoId(parsed);
+    if (ytVideoId) {
+        return `https://www.youtube.com/embed/${ytVideoId}`;
+    }
+
+    if (host === 'www.tiktok.com' || host === 'tiktok.com') {
+        const tiktokMatch = pathname.match(/^\/@[^/]+\/video\/([^/?#]+)/);
+        if (tiktokMatch && tiktokMatch[1]) {
+            return `https://www.tiktok.com/player/v1/${tiktokMatch[1]}`;
+        }
+    }
+
+    if (host === 'rutube.ru') {
+        const rutubeMatch = pathname.match(/^\/(video|shorts)\/([^/]+)\/?$/);
+        if (rutubeMatch && rutubeMatch[2]) {
+            return buildRutubeEmbedUrl(rutubeMatch[2], parsed);
+        }
+    }
+
+    if (host === 'vimeo.com' || host === 'www.vimeo.com') {
+        const vimeoMatch = pathname.match(/^\/(\d+)\/?$/);
+        if (vimeoMatch && vimeoMatch[1]) {
+            return `https://player.vimeo.com/video/${vimeoMatch[1]}`;
+        }
+    }
+
+    return null;
+}
+
+function buildPreviewCandidates(originalUrl) {
+    const candidates = [originalUrl];
+    const alternateUrl = resolveAlternatePreviewUrl(originalUrl);
+    if (alternateUrl && alternateUrl !== originalUrl) {
+        candidates.push(alternateUrl);
+    }
+    return candidates;
+}
+
+function normalizePreviewIdentityFallback(originalUrl) {
+    try {
+        const parsed = new URL(originalUrl);
+        parsed.hash = '';
+        return parsed.toString();
+    } catch (_) {
+        return originalUrl;
+    }
+}
+
+function getPreviewIdentityKey(originalUrl) {
+    let parsed;
+    try {
+        parsed = new URL(originalUrl);
+    } catch (_) {
+        return normalizePreviewIdentityFallback(originalUrl);
+    }
+
+    const host = parsed.hostname.toLowerCase();
+    const pathname = parsed.pathname || '';
+    const ytVideoId = extractYouTubeVideoId(parsed);
+    if (ytVideoId) return `youtube:${ytVideoId}`;
+
+    if (host === 'www.tiktok.com' || host === 'tiktok.com') {
+        const tiktokMatch = pathname.match(/^\/@[^/]+\/video\/([^/?#]+)/);
+        if (tiktokMatch && tiktokMatch[1]) return `tiktok:${tiktokMatch[1]}`;
+    }
+
+    if (host === 'rutube.ru') {
+        const rutubeMatch = pathname.match(/^\/(video|shorts)\/([^/]+)\/?$/);
+        if (rutubeMatch && rutubeMatch[2]) return `rutube:${rutubeMatch[2]}`;
+    }
+
+    if (host === 'vimeo.com' || host === 'www.vimeo.com') {
+        const vimeoMatch = pathname.match(/^\/(\d+)\/?$/);
+        if (vimeoMatch && vimeoMatch[1]) return `vimeo:${vimeoMatch[1]}`;
+    }
+
+    return normalizePreviewIdentityFallback(originalUrl);
+}
+
 function createPopup(url, x, y, anchorRect) {
-    const existingPopup = popups.find((p) => p.requestedUrl === url || p.currentUrl === url);
+    const previewIdentityKey = getPreviewIdentityKey(url);
+    const existingPopup = popups.find((p) => p.previewIdentityKey === previewIdentityKey);
     if (existingPopup) {
         bringToFront(existingPopup.popupId);
         flashPopupAttention(existingPopup);
@@ -538,8 +665,14 @@ function createPopup(url, x, y, anchorRect) {
     const popupId = `popup-${++popupIdCounter}`;
     const popupEntry = {
         popupId,
+        originalUrl: url,
+        previewIdentityKey,
         requestedUrl: url,
         currentUrl: url,
+        currentPreviewUrl: url,
+        previewCandidates: buildPreviewCandidates(url),
+        activeCandidateIndex: 0,
+        activeAttemptId: 0,
         state: 'loading',
         popup: null,
         topBar: null,
@@ -549,6 +682,7 @@ function createPopup(url, x, y, anchorRect) {
         loadingBar: null,
         loadingAnimationTimer: null,
         blockedTimeoutTimer: null,
+        postLoadGraceTimer: null,
         attentionTimer: null,
         x,
         y
@@ -584,7 +718,7 @@ function createPopup(url, x, y, anchorRect) {
     newTabBtn.className = 'link-preview-newtab';
     newTabBtn.innerText = '↗';
     newTabBtn.onclick = () => {
-        window.open(popupEntry.currentUrl || popupEntry.requestedUrl, '_blank');
+        window.open(popupEntry.originalUrl || popupEntry.requestedUrl, '_blank');
         closePopup(popupEntry.popupId);
     };
     topBar.appendChild(newTabBtn);
@@ -731,6 +865,10 @@ function clearPopupLoadLifecycle(popupEntry) {
         clearTimeout(popupEntry.blockedTimeoutTimer);
         popupEntry.blockedTimeoutTimer = null;
     }
+    if (popupEntry.postLoadGraceTimer) {
+        clearTimeout(popupEntry.postLoadGraceTimer);
+        popupEntry.postLoadGraceTimer = null;
+    }
 }
 
 function setPopupLoadingState(popupEntry) {
@@ -759,7 +897,7 @@ function finishPopupLoadingState(popupEntry) {
 }
 
 function renderPopupFallback(popupEntry, message, state) {
-    const fallbackUrl = popupEntry.currentUrl || popupEntry.requestedUrl;
+    const fallbackUrl = popupEntry.originalUrl || popupEntry.requestedUrl;
     const fallback = document.createElement('div');
     fallback.className = 'link-preview-fallback';
     fallback.style.display = 'flex';
@@ -843,68 +981,79 @@ function getLoadedIframeUrl(popupEntry, iframe) {
 
 function finalizePopupReady(popupEntry, iframe) {
     popupEntry.currentUrl = getLoadedIframeUrl(popupEntry, iframe);
+    popupEntry.currentPreviewUrl = popupEntry.previewCandidates[popupEntry.activeCandidateIndex] || popupEntry.currentPreviewUrl;
     popupEntry.state = 'ready';
     finishPopupLoadingState(popupEntry);
 }
 
-function finalizePopupBlocked(popupEntry) {
+function finalizePopupBlocked(popupEntry, message) {
     finishPopupLoadingState(popupEntry);
+    clearPopupBodyContent(popupEntry);
     renderPopupFallback(
         popupEntry,
-        'This page cannot be shown in an embedded preview.',
+        message || 'This page cannot be shown in an embedded preview.',
         'blocked'
     );
 }
 
-function finalizePopupError(popupEntry) {
-    finishPopupLoadingState(popupEntry);
-    renderPopupFallback(
-        popupEntry,
-        'Preview failed to load. Try opening the page in a new tab.',
-        'error'
-    );
+function failActiveCandidate(popupEntry, attemptId, reason) {
+    if (!popupEntry || popupEntry.activeAttemptId !== attemptId || popupEntry.state !== 'loading') return;
+    clearPopupLoadLifecycle(popupEntry);
+    popupEntry.activeCandidateIndex += 1;
+    if (popupEntry.activeCandidateIndex < popupEntry.previewCandidates.length) {
+        mountPopupIframe(popupEntry, popupEntry.previewCandidates[popupEntry.activeCandidateIndex]);
+        return;
+    }
+    const message = reason === 'error'
+        ? 'Preview failed to load. Try opening the page in a new tab.'
+        : 'This page cannot be shown in an embedded preview.';
+    finalizePopupBlocked(popupEntry, message);
 }
 
 function mountPopupIframe(popupEntry, url) {
     clearPopupBodyContent(popupEntry);
+    popupEntry.currentPreviewUrl = url;
+    popupEntry.currentUrl = url;
+    const attemptId = popupEntry.activeAttemptId + 1;
+    popupEntry.activeAttemptId = attemptId;
+
     const iframe = document.createElement('iframe');
     iframe.className = 'link-preview-iframe';
     iframe.dataset.popupId = popupEntry.popupId;
+    iframe.dataset.attemptId = String(attemptId);
     iframe.src = url;
     popupEntry.iframe = iframe;
     popupEntry.bodyContainer.appendChild(iframe);
 
     iframe.addEventListener('load', () => {
-        if (popupEntry.iframe !== iframe) return;
-        const loadedUrl = iframe.src || popupEntry.currentUrl || popupEntry.requestedUrl;
-        if (loadedUrl === 'about:blank' && popupEntry.requestedUrl !== 'about:blank') {
-            finalizePopupBlocked(popupEntry);
-            return;
-        }
-        finalizePopupReady(popupEntry, iframe);
+        if (popupEntry.iframe !== iframe || popupEntry.activeAttemptId !== attemptId) return;
+        popupEntry.postLoadGraceTimer = setTimeout(() => {
+            failActiveCandidate(popupEntry, attemptId, 'no-handshake-after-load');
+        }, 1000);
     }, { once: true });
 
     iframe.addEventListener('error', () => {
-        if (popupEntry.iframe !== iframe) return;
-        finalizePopupError(popupEntry);
+        if (popupEntry.iframe !== iframe || popupEntry.activeAttemptId !== attemptId) return;
+        failActiveCandidate(popupEntry, attemptId, 'error');
     }, { once: true });
 
     popupEntry.blockedTimeoutTimer = setTimeout(() => {
-        if (popupEntry.state === 'loading' && popupEntry.iframe === iframe) {
-            if (iframe.parentNode === popupEntry.bodyContainer) {
-                popupEntry.bodyContainer.removeChild(iframe);
-            }
-            popupEntry.iframe = null;
-            finalizePopupBlocked(popupEntry);
-        }
+        failActiveCandidate(popupEntry, attemptId, 'timeout');
     }, 12000);
 }
 
-function loadPopupUrl(popupEntry, url) {
+function loadPopupUrl(popupEntry, url, options = {}) {
     if (!popupEntry || !url || !popupEntry.bodyContainer) return;
-    popupEntry.currentUrl = url;
+    const { preserveCandidateIndex = false } = options;
+    popupEntry.requestedUrl = url;
+    popupEntry.originalUrl = url;
+    popupEntry.previewIdentityKey = getPreviewIdentityKey(url);
+    popupEntry.previewCandidates = buildPreviewCandidates(url);
+    popupEntry.activeCandidateIndex = preserveCandidateIndex
+        ? Math.min(popupEntry.activeCandidateIndex, popupEntry.previewCandidates.length - 1)
+        : 0;
     setPopupLoadingState(popupEntry);
-    mountPopupIframe(popupEntry, url);
+    mountPopupIframe(popupEntry, popupEntry.previewCandidates[popupEntry.activeCandidateIndex]);
 }
 
 // Debounce to prevent double opening
@@ -942,13 +1091,23 @@ function getPopupById(popupId) {
 function reloadPopup(popupId) {
     const entry = getPopupById(popupId);
     if (!entry) return;
-    const reloadUrl = entry.currentUrl || entry.requestedUrl;
+    const reloadUrl = entry.originalUrl || entry.requestedUrl;
     loadPopupUrl(entry, reloadUrl);
 }
 
-function syncPopupCurrentUrl(popupId, currentUrl) {
+function syncPopupCurrentUrl(popupId, currentUrl, attemptId) {
     if (!popupId || !currentUrl) return;
     const entry = getPopupById(popupId);
     if (!entry) return;
+    if (attemptId && Number(attemptId) !== entry.activeAttemptId) return;
     entry.currentUrl = currentUrl;
+}
+
+function markPopupRuntimeReady(popupId, attemptId, currentUrl) {
+    if (!popupId || !attemptId) return;
+    const entry = getPopupById(popupId);
+    if (!entry || Number(attemptId) !== entry.activeAttemptId || entry.state !== 'loading') return;
+    if (!entry.iframe) return;
+    if (currentUrl) entry.currentUrl = currentUrl;
+    finalizePopupReady(entry, entry.iframe);
 }

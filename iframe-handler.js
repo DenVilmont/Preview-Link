@@ -12,10 +12,12 @@ chrome.storage.onChanged.addListener((changes, area) => {
 if (window.self !== window.top) {
   function sendPopupUrlUpdate() {
     if (!iframeEnabled) return;
-    const popupId = window.frameElement && window.frameElement.dataset
-      ? window.frameElement.dataset.popupId
+    const frameDataset = window.frameElement && window.frameElement.dataset
+      ? window.frameElement.dataset
       : null;
-    if (!popupId) return;
+    const popupId = frameDataset ? frameDataset.popupId : null;
+    const attemptId = frameDataset ? frameDataset.attemptId : null;
+    if (!popupId || !attemptId) return;
     window.parent.postMessage(
       {
         source: 'link-preview-extension',
@@ -23,15 +25,41 @@ if (window.self !== window.top) {
         version: 1,
         action: 'updatePopupUrl',
         popupId,
+        attemptId,
         url: window.location.href
       },
       '*'
     );
   }
 
-  if (document.readyState === 'complete') {
-    sendPopupUrlUpdate();
-  } else {
+  function sendPopupRuntimeReady() {
+    if (!iframeEnabled) return;
+    const frameDataset = window.frameElement && window.frameElement.dataset
+      ? window.frameElement.dataset
+      : null;
+    const popupId = frameDataset ? frameDataset.popupId : null;
+    const attemptId = frameDataset ? frameDataset.attemptId : null;
+    if (!popupId || !attemptId) return;
+    window.parent.postMessage(
+      {
+        source: 'link-preview-extension',
+        type: 'popup-runtime-bridge',
+        version: 1,
+        action: 'previewRuntimeReady',
+        popupId,
+        attemptId,
+        url: window.location.href
+      },
+      '*'
+    );
+  }
+
+  // Child script liveness handshake: emit as soon as this content script runs.
+  sendPopupRuntimeReady();
+  sendPopupUrlUpdate();
+
+  // Keep a later URL sync for freshness after document load.
+  if (document.readyState !== 'complete') {
     window.addEventListener('load', sendPopupUrlUpdate, { once: true });
   }
 
