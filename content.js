@@ -177,9 +177,10 @@ function rectToPayload(rect) {
 }
 
 function rectPayloadToAnchor(rectPayload) {
-  const x = Math.min(window.innerWidth - window.innerWidth / 3, rectPayload.rectRight + 10);
-  const y = Math.min(window.innerHeight - window.innerHeight / 3, rectPayload.rectTop);
-  return { x, y };
+  return {
+    x: rectPayload.rectRight,
+    y: rectPayload.rectTop
+  };
 }
 
 function requestPreviewOpen(url, rectPayload, trigger) {
@@ -191,7 +192,7 @@ function dispatchPreviewRequest(action, url, rectPayload, trigger) {
   if (!isRectPayload(rectPayload)) return;
   if (window.self === window.top) {
     const { x, y } = rectPayloadToAnchor(rectPayload);
-    chrome.runtime.sendMessage({ action, url, x, y, trigger });
+    chrome.runtime.sendMessage({ action, url, x, y, rect: rectPayload, trigger });
     return;
   }
   window.parent.postMessage(
@@ -389,12 +390,85 @@ function handlePreviewOpenRequest(msg) {
   if (!msg || !msg.url) return;
   const x = typeof msg.x === 'number' ? msg.x : 0;
   const y = typeof msg.y === 'number' ? msg.y : 0;
-  createPopup(msg.url, x, y);
+  const anchorRect = isRectPayload(msg.rect) ? msg.rect : null;
+  createPopup(msg.url, x, y, anchorRect);
 }
 
-function createPopup(url, x, y) {
+function showLimitReachedNotice() {
+    const existing = document.getElementById('link-preview-limit-notice');
+    if (existing) {
+        existing.style.opacity = '1';
+        clearTimeout(existing._hideTimer);
+        existing._hideTimer = setTimeout(() => {
+            existing.style.opacity = '0';
+        }, 1800);
+        return;
+    }
+
+    const notice = document.createElement('div');
+    notice.id = 'link-preview-limit-notice';
+    notice.textContent = `Preview limit reached (${MAX_POPUPS}). Close an existing preview to open another.`;
+    notice.style.position = 'fixed';
+    notice.style.top = '16px';
+    notice.style.left = '50%';
+    notice.style.transform = 'translateX(-50%)';
+    notice.style.zIndex = '2147483647';
+    notice.style.background = 'rgba(24, 24, 24, 0.92)';
+    notice.style.color = '#fff';
+    notice.style.padding = '8px 12px';
+    notice.style.borderRadius = '8px';
+    notice.style.fontSize = '13px';
+    notice.style.lineHeight = '1.2';
+    notice.style.boxShadow = '0 4px 16px rgba(0, 0, 0, 0.3)';
+    notice.style.pointerEvents = 'none';
+    notice.style.opacity = '0';
+    notice.style.transition = 'opacity 0.2s ease';
+    document.body.appendChild(notice);
+    requestAnimationFrame(() => {
+        notice.style.opacity = '1';
+    });
+    notice._hideTimer = setTimeout(() => {
+        notice.style.opacity = '0';
+    }, 1800);
+}
+
+function clamp(value, min, max) {
+    if (max < min) return min;
+    return Math.min(Math.max(value, min), max);
+}
+
+function calculatePopupPosition(anchorRect, popupWidth, popupHeight) {
+    const GAP = 10;
+    const viewportWidth = window.innerWidth;
+    const viewportHeight = window.innerHeight;
+    const fallbackAnchor = {
+        rectLeft: 0,
+        rectTop: 0,
+        rectRight: 0,
+        rectBottom: 0
+    };
+    const anchor = anchorRect || fallbackAnchor;
+
+    const rightX = anchor.rectRight + GAP;
+    const leftX = anchor.rectLeft - popupWidth - GAP;
+    const canFitRight = rightX + popupWidth <= viewportWidth;
+    const canFitLeft = leftX >= 0;
+    let x = canFitRight ? rightX : leftX;
+
+    if (!canFitRight && !canFitLeft) {
+        x = clamp(rightX, 0, viewportWidth - popupWidth);
+    }
+
+    const y = clamp(anchor.rectTop, 0, viewportHeight - popupHeight);
+    return { x, y };
+}
+
+function createPopup(url, x, y, anchorRect) {
     // Limit to max popups: do not open new ones when limit reached
-    if (popups.length >= MAX_POPUPS) return;
+    if (popups.length >= MAX_POPUPS) {
+        showLimitReachedNotice();
+        return;
+    }
     // Prevent opening the same link multiple times
     if (popups.some(p => p.requestedUrl === url || p.currentUrl === url)) return;
 
@@ -417,8 +491,8 @@ function createPopup(url, x, y) {
     // Assign initial stacking order
     popup.style.zIndex = ++zIndexCounter;
     popup.className = 'link-preview-popup';
-    popup.style.left = x + 'px';
-    popup.style.top = y + 'px';
+    popup.style.left = '-10000px';
+    popup.style.top = '-10000px';
     popup.style.opacity = '0';
     popup.style.transition = 'opacity 0.3s';
 
@@ -477,6 +551,21 @@ function createPopup(url, x, y) {
     bodyContainer.appendChild(iframe);
 
     document.body.appendChild(popup);
+
+    const measuredWidth = popup.offsetWidth || popup.getBoundingClientRect().width || 0;
+    const measuredHeight = popup.offsetHeight || popup.getBoundingClientRect().height || 0;
+    const fallbackRect = {
+        rectLeft: x,
+        rectTop: y,
+        rectRight: x,
+        rectBottom: y
+    };
+    const position = calculatePopupPosition(anchorRect || fallbackRect, measuredWidth, measuredHeight);
+    popup.style.left = position.x + 'px';
+    popup.style.top = position.y + 'px';
+    popupEntry.x = position.x;
+    popupEntry.y = position.y;
+
     popupEntry.popup = popup;
     popupEntry.topBar = topBar;
     popupEntry.bodyContainer = bodyContainer;
