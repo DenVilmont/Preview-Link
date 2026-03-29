@@ -1,0 +1,38 @@
+{
+   "action": {
+      "default_icon": {
+         "128": "icons/icon-off.png",
+         "16": "icons/icon-off.png",
+         "32": "icons/icon-off.png",
+         "48": "icons/icon-off.png"
+      },
+      "default_popup": "popup.html",
+      "default_title": "Preview Link"
+   },
+   "background": {
+      "service_worker": "background.js"
+   },
+   "content_scripts": [ {
+      "all_frames": true,
+      "css": [ "styles/popup.css" ],
+      "js": [ "content.js" ],
+      "matches": [ "\u003Call_urls>" ]
+   }, {
+      "all_frames": true,
+      "js": [ "iframe-handler.js" ],
+      "matches": [ "\u003Call_urls>" ]
+   } ],
+   "description": "Without Tabs: preview any link's content instantly on hover—no extra tabs needed.",
+   "host_permissions": [ "\u003Call_urls>" ],
+   "icons": {
+      "128": "icons/icon-off.png",
+      "16": "icons/icon-off.png",
+      "32": "icons/icon-off.png",
+      "48": "icons/icon-off.png"
+   },
+   "key": "MIIBIjANBgkqhkiG9w0BAQEFAAOCAQ8AMIIBCgKCAQEAquSmnxaAy9U9gwhJI4m03tGrp9bNsaEjdCjrhjbzqLiGVFkCZMrxrJhiV8mUB5WXXSLwuDvea05xp/E+jB91DM7vxvCxYPrAyUB+iJvzzbALVAzHvRvEshhc0svNuwV7M4rt/xOn+EoLEnoXekMoagIFU5aVYjLs/1zIY+gp2VlFnPRsJuBgA0uViGt5O9IxtlenMVqYoTfQ5J5JvklspkQhHFNahVxB3kbENcc4BVTeoDyxOQ/bWOELhm6sILqfkw10mM+lZqQUGDyXaSFx1Pp2720OVvCCRbc8cPRYmkJkMehRTzx1e2Gths5scfqxo+8cp8ashGa3kFiDMICLKwIDAQAB",
+   "manifest_version": 3,
+   "name": "Preview Link",
+   "permissions": [ "storage" ],
+   "version": "1.0.2.1"
+}

@@ -1,0 +1,23 @@
+# OS / editor
+
+.DS_Store
+Thumbs.db
+
+# IDE
+
+.vscode/
+.idea/
+
+# Build / package artifacts
+
+_metadata/
+dist/
+build/
+release/
+artifacts/
+*.zip
+*.crx
+
+# Logs
+
+*.log
