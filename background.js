@@ -44,7 +44,7 @@ chrome.runtime.onMessage.addListener((msg, sender) => {
     if (msg.action === 'openKeyPreview') {
       const data = lastHovers[sender.tab.id];
       if (data && data.url) {
-        chrome.tabs.sendMessage(sender.tab.id, { action: 'showPreview', url: data.url, x: data.x, y: data.y });
+        chrome.tabs.sendMessage(sender.tab.id, { action: 'requestPreviewOpen', url: data.url, x: data.x, y: data.y, trigger: 'key' });
       }
       return;
     }
@@ -56,8 +56,14 @@ chrome.runtime.onMessage.addListener((msg, sender) => {
       });
       return;
     }
-    if (msg.action === 'showPreview') {
-      chrome.tabs.sendMessage(sender.tab.id, msg);
+    if (msg.action === 'requestPreviewOpen' || msg.action === 'showPreview') {
+      chrome.tabs.sendMessage(sender.tab.id, {
+        action: 'requestPreviewOpen',
+        url: msg.url,
+        x: msg.x,
+        y: msg.y,
+        trigger: msg.trigger || null
+      });
       return;
     }
     if (msg.action === 'updatePopupUrl') {

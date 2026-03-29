@@ -84,16 +84,23 @@ function onContentMouseMove(e) {
         hoverTimer = null;
         return;
       }
-      if (window.self === window.top) {
-        createPopup(link.href, x, y);
-      } else {
-        chrome.runtime.sendMessage({ action: 'showPreview', url: link.href, x, y });
-      }
+      requestPreviewOpen(link.href, x, y, 'hover');
       lastPreviewedLink = link.href;
       lastPreviewedTime = Date.now();
       hoverTimer = null;
     }, hoverDelay);
   }
+}
+
+function requestPreviewOpen(url, x, y, trigger) {
+  if (!enabled || !url) return;
+  chrome.runtime.sendMessage({
+    action: 'requestPreviewOpen',
+    url,
+    x,
+    y,
+    trigger: trigger || null
+  });
 }
 
 function onContentKeyDown(e) {
@@ -116,8 +123,12 @@ function handleRuntimeMessage(msg) {
   if (!enabled || window.self !== window.top) return;
 
   switch (msg.action) {
+    case 'requestPreviewOpen':
+      handlePreviewOpenRequest(msg);
+      break;
     case 'showPreview':
-      createPopup(msg.url, msg.x, msg.y);
+      // Legacy relay path: normalize to the single preview-open handler.
+      handlePreviewOpenRequest(msg);
       break;
     case 'bringToFront':
       bringToFront(msg.popupId, msg.url);
@@ -178,6 +189,13 @@ chrome.storage.onChanged.addListener((changes, area) => {
 
 // z-index counter to manage popup stacking
 let zIndexCounter = 1000;
+
+function handlePreviewOpenRequest(msg) {
+  if (!msg || !msg.url) return;
+  const x = typeof msg.x === 'number' ? msg.x : 0;
+  const y = typeof msg.y === 'number' ? msg.y : 0;
+  createPopup(msg.url, x, y);
+}
 
 function createPopup(url, x, y) {
     // Limit to max popups: do not open new ones when limit reached
