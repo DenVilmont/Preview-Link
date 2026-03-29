@@ -4,27 +4,57 @@ let MAX_POPUPS = 2;
 // Hover delay before opening popup (ms)
 let hoverDelay = 2000;
 let hoverTimer = null;
-let hoverLink = null; // last hovered link
-let hoverRect = null; // to store link position for key-trigger
 
 // Enabled/disabled and additional settings
 let enabled = true;
 let interactionType = 'hover';
-let interactionKey = '';
+let triggerKey = '';
+let listenersAttached = false;
+
+function normalizeInteractionType(value) {
+  return value === 'button' ? 'hoverWithKey' : value;
+}
+
+function normalizeTriggerKey(settings) {
+  return settings.triggerKey || settings.interactionKey || '';
+}
+
+function migrateSettingsIfNeeded(settings) {
+  const updates = {};
+  if (settings.interactionType === 'button') {
+    updates.interactionType = 'hoverWithKey';
+  }
+  if (settings.interactionKey && !settings.triggerKey) {
+    updates.triggerKey = settings.interactionKey;
+  }
+  if (Object.keys(updates).length > 0) {
+    chrome.storage.local.set(updates);
+  }
+}
 
 // Load initial settings
-chrome.storage.local.get({ enabled: true, maxPopups: 2, hoverDelay: 2000, interactionType: 'hover', interactionKey: '' }, (data) => {
-  enabled = data.enabled;
-  MAX_POPUPS = data.maxPopups;
-  hoverDelay = data.hoverDelay;
-  interactionType = data.interactionType;
-  interactionKey = data.interactionKey;
-  // Attach listeners if extension is enabled
-  if (enabled) attachListeners();
-});
+chrome.storage.local.get(
+  {
+    enabled: true,
+    maxPopups: 2,
+    hoverDelay: 2000,
+    interactionType: 'hover',
+    triggerKey: '',
+    interactionKey: ''
+  },
+  (data) => {
+    enabled = data.enabled;
+    MAX_POPUPS = data.maxPopups;
+    hoverDelay = data.hoverDelay;
+    interactionType = normalizeInteractionType(data.interactionType);
+    triggerKey = normalizeTriggerKey(data);
+    migrateSettingsIfNeeded(data);
 
-// Manage content script listeners for enable/disable
-const contentListeners = {};
+    // Attach listeners if extension is enabled
+    if (enabled) attachListeners();
+  }
+);
+
 function onContentMouseMove(e) {
   if (!enabled) return;
   const link = e.target.closest('a');
@@ -63,65 +93,81 @@ function onContentMouseMove(e) {
     }, hoverDelay);
   }
 }
+
 function onContentKeyDown(e) {
   if (!enabled) return;
   if (interactionType === 'hover') return;
-  if (interactionType === 'button') {
-    if (interactionKey && e.code === interactionKey) {
+  if (interactionType === 'hoverWithKey') {
+    if (triggerKey && e.code === triggerKey) {
       chrome.runtime.sendMessage({ action: 'openKeyPreview' });
     }
-  } else {
-    const modKey = interactionType + 'Key';
-    if (e[modKey]) {
-      chrome.runtime.sendMessage({ action: 'openKeyPreview' });
-    }
+    return;
+  }
+
+  const modKey = interactionType + 'Key';
+  if (e[modKey]) {
+    chrome.runtime.sendMessage({ action: 'openKeyPreview' });
   }
 }
-function onContentRuntimeMessage(msg, sender) {
-  if (!enabled) return;
-  if (msg.action === 'showPreview' && window.self === window.top) {
-    createPopup(msg.url, msg.x, msg.y);
-  }
-  if (msg.action === 'bringToFront' && window.self === window.top) {
-    bringToFront(msg.url);
+
+function handleRuntimeMessage(msg) {
+  if (!enabled || window.self !== window.top) return;
+
+  switch (msg.action) {
+    case 'showPreview':
+      createPopup(msg.url, msg.x, msg.y);
+      break;
+    case 'bringToFront':
+      bringToFront(msg.url);
+      break;
+    default:
+      break;
   }
 }
+
 function attachListeners() {
+  if (listenersAttached) return;
   document.addEventListener('mousemove', onContentMouseMove);
   document.addEventListener('keydown', onContentKeyDown);
-  chrome.runtime.onMessage.addListener(onContentRuntimeMessage);
+  chrome.runtime.onMessage.addListener(handleRuntimeMessage);
+  listenersAttached = true;
 }
+
 function detachListeners() {
+  if (!listenersAttached) return;
   document.removeEventListener('mousemove', onContentMouseMove);
   document.removeEventListener('keydown', onContentKeyDown);
-  chrome.runtime.onMessage.removeListener(onContentRuntimeMessage);
+  chrome.runtime.onMessage.removeListener(handleRuntimeMessage);
+  listenersAttached = false;
 }
 
 // Update settings on change
 chrome.storage.onChanged.addListener((changes, area) => {
-  if (area === 'local') {
-    if (changes.enabled) {
-      enabled = changes.enabled.newValue;
-      if (enabled) {
-        attachListeners();
-      } else {
-        detachListeners();
-        popups.slice().forEach(p => closePopup(p.popup));
-        popups = [];
-      }
+  if (area !== 'local') return;
+
+  if (changes.enabled) {
+    enabled = changes.enabled.newValue;
+    if (enabled) {
+      attachListeners();
+    } else {
+      detachListeners();
+      popups.slice().forEach((p) => closePopup(p.popup));
+      popups = [];
     }
-    if (changes.maxPopups) {
-      MAX_POPUPS = changes.maxPopups.newValue;
-    }
-    if (changes.hoverDelay) {
-      hoverDelay = changes.hoverDelay.newValue;
-    }
-    if (changes.interactionType) {
-      interactionType = changes.interactionType.newValue;
-    }
-    if (changes.interactionKey) {
-      interactionKey = changes.interactionKey.newValue;
-    }
+  }
+  if (changes.maxPopups) {
+    MAX_POPUPS = changes.maxPopups.newValue;
+  }
+  if (changes.hoverDelay) {
+    hoverDelay = changes.hoverDelay.newValue;
+  }
+  if (changes.interactionType) {
+    interactionType = normalizeInteractionType(changes.interactionType.newValue);
+  }
+  if (changes.triggerKey) {
+    triggerKey = changes.triggerKey.newValue || '';
+  } else if (changes.interactionKey) {
+    triggerKey = changes.interactionKey.newValue || '';
   }
 });
 
@@ -345,14 +391,3 @@ function bringToFront(url) {
         entry.popup.style.zIndex = ++zIndexCounter;
     }
 }
-
-// Listen for preview messages from iframes and open popup in top-level
-chrome.runtime.onMessage.addListener((msg, sender) => {
-  if (!enabled) return;
-  if (msg.action === 'showPreview' && window.self === window.top) {
-    createPopup(msg.url, msg.x, msg.y);
-  }
-  if (msg.action === 'bringToFront' && window.self === window.top) {
-    bringToFront(msg.url);
-  }
-}); 
