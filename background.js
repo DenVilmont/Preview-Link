@@ -58,6 +58,14 @@ chrome.runtime.onMessage.addListener((msg, sender) => {
     }
     if (msg.action === 'showPreview') {
       chrome.tabs.sendMessage(sender.tab.id, msg);
+      return;
+    }
+    if (msg.action === 'updatePopupUrl') {
+      chrome.tabs.sendMessage(sender.tab.id, {
+        action: 'updatePopupUrl',
+        popupId: msg.popupId || null,
+        url: msg.url
+      });
     }
   }
 }); 

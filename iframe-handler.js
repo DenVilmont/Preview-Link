@@ -10,6 +10,25 @@ chrome.storage.onChanged.addListener((changes, area) => {
   }
 });
 if (window.self !== window.top) {
+  function sendPopupUrlUpdate() {
+    if (!iframeEnabled) return;
+    const popupId = window.frameElement && window.frameElement.dataset
+      ? window.frameElement.dataset.popupId
+      : null;
+    if (!popupId) return;
+    chrome.runtime.sendMessage({
+      action: 'updatePopupUrl',
+      popupId,
+      url: window.location.href
+    });
+  }
+
+  if (document.readyState === 'complete') {
+    sendPopupUrlUpdate();
+  } else {
+    window.addEventListener('load', sendPopupUrlUpdate, { once: true });
+  }
+
   // Handle wheel events within iframe: allow native smooth scrolling and prevent propagation to host
   document.addEventListener('wheel', e => {
     if (!iframeEnabled) return;

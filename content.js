@@ -122,6 +122,9 @@ function handleRuntimeMessage(msg) {
     case 'bringToFront':
       bringToFront(msg.popupId, msg.url);
       break;
+    case 'updatePopupUrl':
+      syncPopupCurrentUrl(msg.popupId, msg.url);
+      break;
     default:
       break;
   }
@@ -436,4 +439,11 @@ function reloadPopup(popupId) {
     entry.iframe = newIframe;
     bindIframeStateHandlers(entry);
     simulateLoadingBar(entry);
+}
+
+function syncPopupCurrentUrl(popupId, currentUrl) {
+    if (!popupId || !currentUrl) return;
+    const entry = getPopupById(popupId);
+    if (!entry) return;
+    entry.currentUrl = currentUrl;
 }
