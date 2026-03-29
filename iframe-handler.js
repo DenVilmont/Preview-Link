@@ -28,6 +28,9 @@ if (window.self !== window.top) {
   // Bring this popup to front when clicking inside its iframe
   document.addEventListener('mousedown', () => {
     if (!iframeEnabled) return;
-    chrome.runtime.sendMessage({ action: 'bringToFront', url: window.location.href });
+    const popupId = window.frameElement && window.frameElement.dataset
+      ? window.frameElement.dataset.popupId
+      : null;
+    chrome.runtime.sendMessage({ action: 'bringToFront', popupId, url: window.location.href });
   });
 }
