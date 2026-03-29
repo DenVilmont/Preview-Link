@@ -12,7 +12,8 @@ let triggerKey = '';
 let listenersAttached = false;
 
 function normalizeInteractionType(value) {
-  return value === 'button' ? 'hoverWithKey' : value;
+  if (value === 'button') return 'hoverWithKey';
+  return value === 'hoverWithKey' ? 'hoverWithKey' : 'hover';
 }
 
 function normalizeTriggerKey(settings) {
