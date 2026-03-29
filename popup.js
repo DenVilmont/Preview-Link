@@ -11,7 +11,8 @@ document.addEventListener('DOMContentLoaded', () => {
   const delayContainer = document.getElementById('delay-container');
 
   function normalizeInteractionType(value) {
-    return value === 'button' ? 'hoverWithKey' : value;
+    if (value === 'button') return 'hoverWithKey';
+    return value === 'hoverWithKey' ? 'hoverWithKey' : 'hover';
   }
 
   function normalizeTriggerKey(settings) {
@@ -42,8 +43,24 @@ document.addEventListener('DOMContentLoaded', () => {
     return display.toUpperCase();
   }
 
+  function getTriggerKeyDisplay(code) {
+    return code ? codeToLabel(code) : 'No key selected';
+  }
+
   function setKeyDisplay(code) {
-    keyDisplay.textContent = code ? codeToLabel(code) : 'None';
+    keyDisplay.textContent = getTriggerKeyDisplay(code);
+  }
+
+  function renderInteractionSettings(interactionType, hoverDelayValue, triggerKeyValue) {
+    const isHover = interactionType === 'hover';
+    interactionHover.checked = isHover;
+    interactionHoverWithKey.checked = !isHover;
+    delaySlider.disabled = !isHover;
+    keySelector.style.display = isHover ? 'none' : 'flex';
+    delayContainer.style.display = isHover ? 'flex' : 'none';
+    delaySlider.value = hoverDelayValue;
+    delayLabel.textContent = hoverDelayValue + ' ms';
+    setKeyDisplay(triggerKeyValue);
   }
 
   // Load initial state and settings
@@ -63,24 +80,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
       toggle.checked = data.enabled;
       maxInput.value = data.maxPopups;
-      delaySlider.value = data.hoverDelay;
-      delayLabel.textContent = data.hoverDelay + ' ms';
-
-      // Initialize interaction UI and key selector visibility
-      if (interactionType === 'hover') {
-        interactionHover.checked = true;
-        delaySlider.disabled = false;
-        keySelector.style.display = 'none';
-        delayContainer.style.display = 'flex';
-      } else {
-        interactionHoverWithKey.checked = true;
-        delaySlider.value = 0;
-        delayLabel.textContent = '0 ms';
-        delaySlider.disabled = true;
-        keySelector.style.display = 'flex';
-        setKeyDisplay(triggerKey);
-        delayContainer.style.display = 'none';
-      }
+      renderInteractionSettings(interactionType, data.hoverDelay, triggerKey);
       updateIcon(data.enabled);
     }
   );
@@ -110,28 +110,20 @@ document.addEventListener('DOMContentLoaded', () => {
   interactionHover.addEventListener('change', () => {
     if (interactionHover.checked) {
       chrome.storage.local.set({ interactionType: 'hover' });
-      const defaultDelay = 1500;
-      chrome.storage.local.set({ hoverDelay: defaultDelay });
-      delaySlider.value = defaultDelay;
-      delayLabel.textContent = defaultDelay + ' ms';
-      delaySlider.disabled = false;
-      keySelector.style.display = 'none';
-      delayContainer.style.display = 'flex';
+      chrome.storage.local.get({ hoverDelay: 2000, triggerKey: '', interactionKey: '' }, (settings) => {
+        const triggerKey = normalizeTriggerKey(settings);
+        renderInteractionSettings('hover', settings.hoverDelay, triggerKey);
+      });
     }
   });
 
   interactionHoverWithKey.addEventListener('change', () => {
     if (interactionHoverWithKey.checked) {
       chrome.storage.local.set({ interactionType: 'hoverWithKey' });
-      chrome.storage.local.set({ hoverDelay: 0 });
-      delaySlider.value = 0;
-      delayLabel.textContent = '0 ms';
-      delaySlider.disabled = true;
-      keySelector.style.display = 'flex';
-      chrome.storage.local.get({ triggerKey: '', interactionKey: '' }, (settings) => {
-        setKeyDisplay(normalizeTriggerKey(settings));
+      chrome.storage.local.get({ hoverDelay: 2000, triggerKey: '', interactionKey: '' }, (settings) => {
+        const triggerKey = normalizeTriggerKey(settings);
+        renderInteractionSettings('hoverWithKey', settings.hoverDelay, triggerKey);
       });
-      delayContainer.style.display = 'none';
     }
   });
 
