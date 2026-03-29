@@ -75,7 +75,7 @@ function onContentMouseMove(e) {
   lastHoveredY = y;
   if (lastSentHoverUrl !== link.href) {
     lastSentHoverUrl = link.href;
-    chrome.runtime.sendMessage({ action: 'updateHover', url: link.href, x, y });
+    dispatchPreviewRequest('updateHover', link.href, x, y, null);
   }
   if (interactionType === 'hover') {
     if (hoverTimer) clearTimeout(hoverTimer);
@@ -94,13 +94,66 @@ function onContentMouseMove(e) {
 
 function requestPreviewOpen(url, x, y, trigger) {
   if (!enabled || !url) return;
-  chrome.runtime.sendMessage({
-    action: 'requestPreviewOpen',
-    url,
-    x,
-    y,
-    trigger: trigger || null
-  });
+  dispatchPreviewRequest('requestPreviewOpen', url, x, y, trigger || null);
+}
+
+function dispatchPreviewRequest(action, url, x, y, trigger) {
+  if (window.self === window.top) {
+    chrome.runtime.sendMessage({ action, url, x, y, trigger });
+    return;
+  }
+  window.parent.postMessage(
+    {
+      source: 'link-preview-extension',
+      type: 'preview-coordinate-hop',
+      action,
+      url,
+      x,
+      y,
+      trigger: trigger || null
+    },
+    '*'
+  );
+}
+
+function onCoordinateHopMessage(event) {
+  if (!enabled) return;
+  const data = event && event.data;
+  if (!data || data.source !== 'link-preview-extension' || data.type !== 'preview-coordinate-hop') return;
+  if (!data.url || typeof data.x !== 'number' || typeof data.y !== 'number') return;
+  if (data.action !== 'updateHover' && data.action !== 'requestPreviewOpen') return;
+
+  let x = data.x;
+  let y = data.y;
+  if (window.self !== window.top && window.frameElement) {
+    const frameRect = window.frameElement.getBoundingClientRect();
+    x += frameRect.left;
+    y += frameRect.top;
+  }
+
+  if (window.self === window.top) {
+    chrome.runtime.sendMessage({
+      action: data.action,
+      url: data.url,
+      x,
+      y,
+      trigger: data.trigger || null
+    });
+    return;
+  }
+
+  window.parent.postMessage(
+    {
+      source: 'link-preview-extension',
+      type: 'preview-coordinate-hop',
+      action: data.action,
+      url: data.url,
+      x,
+      y,
+      trigger: data.trigger || null
+    },
+    '*'
+  );
 }
 
 function onContentKeyDown(e) {
@@ -146,6 +199,7 @@ function attachListeners() {
   document.addEventListener('mousemove', onContentMouseMove);
   document.addEventListener('keydown', onContentKeyDown);
   chrome.runtime.onMessage.addListener(handleRuntimeMessage);
+  window.addEventListener('message', onCoordinateHopMessage);
   listenersAttached = true;
 }
 
@@ -154,6 +208,7 @@ function detachListeners() {
   document.removeEventListener('mousemove', onContentMouseMove);
   document.removeEventListener('keydown', onContentKeyDown);
   chrome.runtime.onMessage.removeListener(handleRuntimeMessage);
+  window.removeEventListener('message', onCoordinateHopMessage);
   listenersAttached = false;
 }
 
