@@ -64,6 +64,10 @@ const hoverInteraction = {
   timerPending: false,
   keyEligible: false
 };
+const sharedHoverCandidate = {
+  url: null,
+  rect: null
+};
 
 function clearHoverTimer() {
   if (hoverInteraction.timerId) {
@@ -83,7 +87,8 @@ function resetHoverInteraction() {
 
 function dispatchHoverClear() {
   if (window.self === window.top) {
-    chrome.runtime.sendMessage({ action: 'clearHover' });
+    sharedHoverCandidate.url = null;
+    sharedHoverCandidate.rect = null;
     return;
   }
   window.parent.postMessage(
@@ -99,7 +104,7 @@ function dispatchHoverClear() {
 
 function dispatchKeyPreviewOpen() {
   if (window.self === window.top) {
-    chrome.runtime.sendMessage({ action: 'openKeyPreview' });
+    openKeyPreviewFromSharedHover();
     return;
   }
   window.parent.postMessage(
@@ -133,7 +138,12 @@ function onContentPointerOver(e) {
   hoverInteraction.activeUrl = link.href;
   hoverInteraction.activeRect = localRect;
   hoverInteraction.keyEligible = interactionType === 'hoverWithKey';
-  dispatchPreviewRequest('updateHover', link.href, localRect, null);
+  if (window.self === window.top) {
+    sharedHoverCandidate.url = link.href;
+    sharedHoverCandidate.rect = localRect;
+  } else {
+    dispatchPreviewRequest('updateHover', link.href, localRect, null);
+  }
 
   if (interactionType === 'hover') {
     const enteredLink = link;
@@ -188,11 +198,33 @@ function requestPreviewOpen(url, rectPayload, trigger) {
   dispatchPreviewRequest('requestPreviewOpen', url, rectPayload, trigger || null);
 }
 
+function openKeyPreviewFromSharedHover() {
+  if (!enabled) return;
+  if (!sharedHoverCandidate.url || !isRectPayload(sharedHoverCandidate.rect)) return;
+  const { x, y } = rectPayloadToAnchor(sharedHoverCandidate.rect);
+  handlePreviewOpenRequest({
+    action: 'requestPreviewOpen',
+    url: sharedHoverCandidate.url,
+    x,
+    y,
+    rect: sharedHoverCandidate.rect,
+    trigger: 'key'
+  });
+}
+
 function dispatchPreviewRequest(action, url, rectPayload, trigger) {
   if (!isRectPayload(rectPayload)) return;
   if (window.self === window.top) {
-    const { x, y } = rectPayloadToAnchor(rectPayload);
-    chrome.runtime.sendMessage({ action, url, x, y, rect: rectPayload, trigger });
+    if (action === 'updateHover') {
+      sharedHoverCandidate.url = url;
+      sharedHoverCandidate.rect = rectPayload;
+      return;
+    }
+    if (action === 'requestPreviewOpen' || action === 'showPreview') {
+      const { x, y } = rectPayloadToAnchor(rectPayload);
+      handlePreviewOpenRequest({ action: 'requestPreviewOpen', url, x, y, rect: rectPayload, trigger });
+      return;
+    }
     return;
   }
   window.parent.postMessage(
@@ -242,7 +274,7 @@ function onCoordinateHopMessage(event) {
   if (!isDirectChildWindow(event.source)) return;
   if (data.action === 'triggerKeyPreviewOpen') {
     if (window.self === window.top) {
-      chrome.runtime.sendMessage({ action: 'openKeyPreview' });
+      openKeyPreviewFromSharedHover();
       return;
     }
     window.parent.postMessage(data, '*');
@@ -250,7 +282,8 @@ function onCoordinateHopMessage(event) {
   }
   if (data.action === 'clearHover') {
     if (window.self === window.top) {
-      chrome.runtime.sendMessage({ action: 'clearHover' });
+      sharedHoverCandidate.url = null;
+      sharedHoverCandidate.rect = null;
       return;
     }
     window.parent.postMessage(data, '*');
@@ -266,14 +299,22 @@ function onCoordinateHopMessage(event) {
   }
 
   if (window.self === window.top) {
-    const { x, y } = rectPayloadToAnchor(rect);
-    chrome.runtime.sendMessage({
-      action: data.action,
-      url: data.url,
-      x,
-      y,
-      trigger: data.trigger || null
-    });
+    if (data.action === 'updateHover') {
+      sharedHoverCandidate.url = data.url;
+      sharedHoverCandidate.rect = rect;
+      return;
+    }
+    if (data.action === 'requestPreviewOpen') {
+      const { x, y } = rectPayloadToAnchor(rect);
+      handlePreviewOpenRequest({
+        action: 'requestPreviewOpen',
+        url: data.url,
+        x,
+        y,
+        rect,
+        trigger: data.trigger || null
+      });
+    }
     return;
   }
 
@@ -329,6 +370,22 @@ function handleRuntimeMessage(msg) {
   }
 }
 
+function onPopupRuntimeMessage(event) {
+  if (!enabled || window.self !== window.top) return;
+  const data = event && event.data;
+  if (!data || typeof data !== 'object') return;
+  if (data.source !== 'link-preview-extension' || data.type !== 'popup-runtime-bridge' || data.version !== 1) return;
+  if (!isDirectChildWindow(event.source)) return;
+
+  if (data.action === 'bringToFront') {
+    bringToFront(data.popupId || null, data.url);
+    return;
+  }
+  if (data.action === 'updatePopupUrl') {
+    syncPopupCurrentUrl(data.popupId || null, data.url);
+  }
+}
+
 function attachListeners() {
   if (listenersAttached) return;
   document.addEventListener('pointerover', onContentPointerOver);
@@ -336,6 +393,7 @@ function attachListeners() {
   document.addEventListener('keydown', onContentKeyDown);
   chrome.runtime.onMessage.addListener(handleRuntimeMessage);
   window.addEventListener('message', onCoordinateHopMessage);
+  window.addEventListener('message', onPopupRuntimeMessage);
   listenersAttached = true;
 }
 
@@ -346,6 +404,7 @@ function detachListeners() {
   document.removeEventListener('keydown', onContentKeyDown);
   chrome.runtime.onMessage.removeListener(handleRuntimeMessage);
   window.removeEventListener('message', onCoordinateHopMessage);
+  window.removeEventListener('message', onPopupRuntimeMessage);
   dispatchHoverClear();
   resetHoverInteraction();
   listenersAttached = false;

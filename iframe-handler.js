@@ -16,11 +16,17 @@ if (window.self !== window.top) {
       ? window.frameElement.dataset.popupId
       : null;
     if (!popupId) return;
-    chrome.runtime.sendMessage({
-      action: 'updatePopupUrl',
-      popupId,
-      url: window.location.href
-    });
+    window.parent.postMessage(
+      {
+        source: 'link-preview-extension',
+        type: 'popup-runtime-bridge',
+        version: 1,
+        action: 'updatePopupUrl',
+        popupId,
+        url: window.location.href
+      },
+      '*'
+    );
   }
 
   if (document.readyState === 'complete') {
@@ -42,6 +48,16 @@ if (window.self !== window.top) {
     const popupId = window.frameElement && window.frameElement.dataset
       ? window.frameElement.dataset.popupId
       : null;
-    chrome.runtime.sendMessage({ action: 'bringToFront', popupId, url: window.location.href });
+    window.parent.postMessage(
+      {
+        source: 'link-preview-extension',
+        type: 'popup-runtime-bridge',
+        version: 1,
+        action: 'bringToFront',
+        popupId,
+        url: window.location.href
+      },
+      '*'
+    );
   });
 }
