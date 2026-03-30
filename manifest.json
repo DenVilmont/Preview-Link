@@ -14,7 +14,6 @@
    },
    "content_scripts": [ {
       "all_frames": true,
-      "css": [ "styles/popup.css" ],
       "js": [ "content.js" ],
       "matches": [ "\u003Call_urls>" ]
    }, {

@@ -44,7 +44,7 @@ The application is currently built as:
 * Manifest V3 extension
 * background service worker
 * content scripts
-* DOM-rendered floating preview popups
+* Shadow-DOM-hosted floating preview popups
 * iframe-based live preview
 
 ## Project structure
@@ -56,8 +56,6 @@ content.js
 iframe-handler.js
 popup.html
 popup.js
-styles/
-  popup.css
 icons/
   icon-off.png
   icon-on.png
@@ -100,7 +98,6 @@ The package should include runtime files such as:
 * `manifest.json`
 * JavaScript files
 * `popup.html`
-* `styles/`
 * `icons/`
 
 The package should not include:

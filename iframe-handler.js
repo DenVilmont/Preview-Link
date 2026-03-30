@@ -10,28 +10,14 @@ chrome.storage.onChanged.addListener((changes, area) => {
   }
 });
 if (window.self !== window.top) {
-  function getPopupFrameContext() {
-    const frameDataset = window.frameElement && window.frameElement.dataset
-      ? window.frameElement.dataset
-      : null;
-    const popupId = frameDataset ? frameDataset.popupId : null;
-    const attemptId = frameDataset ? frameDataset.attemptId : null;
-    if (!popupId || !attemptId) return null;
-    return { popupId, attemptId };
-  }
-
   function sendPopupUrlUpdate() {
     if (!iframeEnabled) return;
-    const context = getPopupFrameContext();
-    if (!context) return;
     window.parent.postMessage(
       {
         source: 'link-preview-extension',
         type: 'popup-runtime-bridge',
         version: 1,
         action: 'updatePopupUrl',
-        popupId: context.popupId,
-        attemptId: context.attemptId,
         url: window.location.href
       },
       '*'
@@ -40,16 +26,12 @@ if (window.self !== window.top) {
 
   function sendPreviewFrameAlive() {
     if (!iframeEnabled) return;
-    const context = getPopupFrameContext();
-    if (!context) return;
     window.parent.postMessage(
       {
         source: 'link-preview-extension',
         type: 'popup-runtime-bridge',
         version: 1,
         action: 'previewFrameAlive',
-        popupId: context.popupId,
-        attemptId: context.attemptId,
         url: window.location.href
       },
       '*'
@@ -60,9 +42,16 @@ if (window.self !== window.top) {
   sendPreviewFrameAlive();
   sendPopupUrlUpdate();
 
-  // Keep a later URL sync for freshness after document load.
+  function sendPostLoadBridgeSignals() {
+    sendPreviewFrameAlive();
+    sendPopupUrlUpdate();
+  }
+
+  // Re-emit liveness after full frame load so fast startups do not rely on a single early signal.
   if (document.readyState !== 'complete') {
-    window.addEventListener('load', sendPopupUrlUpdate, { once: true });
+    window.addEventListener('load', sendPostLoadBridgeSignals, { once: true });
+  } else {
+    setTimeout(sendPostLoadBridgeSignals, 0);
   }
 
   // Handle wheel events within iframe: allow native smooth scrolling and prevent propagation to host
@@ -75,16 +64,12 @@ if (window.self !== window.top) {
   // Bring this popup to front when clicking inside its iframe
   document.addEventListener('mousedown', () => {
     if (!iframeEnabled) return;
-    const popupId = window.frameElement && window.frameElement.dataset
-      ? window.frameElement.dataset.popupId
-      : null;
     window.parent.postMessage(
       {
         source: 'link-preview-extension',
         type: 'popup-runtime-bridge',
         version: 1,
         action: 'bringToFront',
-        popupId,
         url: window.location.href
       },
       '*'

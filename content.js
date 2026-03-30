@@ -229,7 +229,7 @@ function dispatchPreviewRequest(action, url, rectPayload, trigger) {
       sharedHoverCandidate.rect = rectPayload;
       return;
     }
-    if (action === 'requestPreviewOpen' || action === 'showPreview') {
+    if (action === 'requestPreviewOpen') {
       const { x, y } = rectPayloadToAnchor(rectPayload);
       handlePreviewOpenRequest({ action: 'requestPreviewOpen', url, x, y, rect: rectPayload, trigger });
       return;
@@ -357,53 +357,25 @@ function onContentKeyDown(e) {
   }
 }
 
-function handleRuntimeMessage(msg) {
-  if (!enabled || window.self !== window.top) return;
-
-  switch (msg.action) {
-    case 'requestPreviewOpen':
-      handlePreviewOpenRequest(msg);
-      break;
-    case 'showPreview':
-      // Legacy relay path: normalize to the single preview-open handler.
-      handlePreviewOpenRequest(msg);
-      break;
-    case 'bringToFront':
-      bringToFront(msg.popupId, msg.url);
-      break;
-    case 'updatePopupUrl':
-      syncPopupCurrentUrl(msg.popupId, msg.url, msg.attemptId || null);
-      break;
-    case 'previewFrameAlive':
-    case 'previewRuntimeReady':
-      markPopupRuntimeReady(msg.popupId, msg.attemptId, msg.url || null);
-      break;
-    default:
-      break;
-  }
-}
-
 function onPopupRuntimeMessage(event) {
   if (!enabled || window.self !== window.top) return;
   const data = event && event.data;
   if (!data || typeof data !== 'object') return;
   if (data.source !== 'link-preview-extension' || data.type !== 'popup-runtime-bridge' || data.version !== 1) return;
-  if (!isDirectChildWindow(event.source)) return;
+  const popupEntry = getPopupByIframeWindow(event.source);
+  if (!popupEntry) return;
 
   if (data.action === 'bringToFront') {
-    bringToFront(data.popupId || null, data.url);
+    bringToFront(popupEntry.popupId, data.url);
     return;
   }
   if (data.action === 'updatePopupUrl') {
-    syncPopupCurrentUrl(data.popupId || null, data.url, data.attemptId || null);
+    syncPopupCurrentUrlForEntry(popupEntry, data.url || null);
     return;
   }
   if (data.action === 'previewFrameAlive') {
-    markPopupRuntimeReady(data.popupId || null, data.attemptId || null, data.url || null);
+    markPopupFrameAliveForEntry(popupEntry, data.url || null);
     return;
-  }
-  if (data.action === 'previewRuntimeReady') {
-    markPopupRuntimeReady(data.popupId || null, data.attemptId || null, data.url || null);
   }
 }
 
@@ -412,7 +384,6 @@ function attachListeners() {
   document.addEventListener('pointerover', onContentPointerOver);
   document.addEventListener('pointerout', onContentPointerOut);
   document.addEventListener('keydown', onContentKeyDown);
-  chrome.runtime.onMessage.addListener(handleRuntimeMessage);
   window.addEventListener('message', onCoordinateHopMessage);
   window.addEventListener('message', onPopupRuntimeMessage);
   listenersAttached = true;
@@ -423,7 +394,6 @@ function detachListeners() {
   document.removeEventListener('pointerover', onContentPointerOver);
   document.removeEventListener('pointerout', onContentPointerOut);
   document.removeEventListener('keydown', onContentKeyDown);
-  chrome.runtime.onMessage.removeListener(handleRuntimeMessage);
   window.removeEventListener('message', onCoordinateHopMessage);
   window.removeEventListener('message', onPopupRuntimeMessage);
   dispatchHoverClear();
@@ -521,6 +491,220 @@ const POPUP_GAP_PX = 10;
 const TOP_BAR_PROBE_LEFT_OFFSETS_PX = [16, 56];
 const TOP_BAR_RESCUE_MARGIN_PX = 4;
 const VIEWPORT_HIT_TEST_PADDING_PX = 1;
+const POPUP_CHROME_SHADOW_STYLES = `
+:host {
+    all: initial;
+    position: fixed;
+    z-index: 999999;
+    min-width: 256px;
+    min-height: 128px;
+    width: 33vw;
+    height: 33vh;
+    display: flex;
+    flex-direction: column;
+    background: #ffffff;
+    border: 2px solid #4f8cff;
+    border-radius: 12px;
+    box-shadow: 0 8px 32px rgba(0, 0, 0, 0.25);
+    overflow: hidden;
+    box-sizing: border-box;
+    pointer-events: auto;
+    opacity: 0;
+    transform: scale(1);
+    transition: opacity 0.3s, transform 0.3s, border-color 0.2s ease, box-shadow 0.2s ease;
+    color: #0f172a;
+    color-scheme: light;
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+    line-height: 1.4;
+}
+
+:host(.link-preview-popup--attention) {
+    border-color: #ffd24d;
+    box-shadow: 0 0 0 4px rgba(255, 210, 77, 0.55), 0 8px 32px rgba(0, 0, 0, 0.25);
+}
+
+*, *::before, *::after {
+    box-sizing: border-box;
+}
+
+button {
+    font: inherit;
+}
+
+.link-preview-topbar {
+    position: relative;
+    flex: 0 0 32px;
+    background: #eaf2ff;
+    border-bottom: 1px solid #b3d1ff;
+    user-select: none;
+    cursor: move;
+}
+
+.link-preview-body {
+    position: relative;
+    display: flex;
+    flex: 1 1 auto;
+    min-height: 0;
+    overflow: hidden;
+    background: #ffffff;
+}
+
+.link-preview-loading-bar {
+    position: absolute;
+    top: 0;
+    left: 0;
+    z-index: 2;
+    height: 4px;
+    width: 0%;
+    background: linear-gradient(90deg, #4f8cff, #00e0c6);
+    transition: width 0.2s, opacity 0.5s;
+    opacity: 1;
+    pointer-events: none;
+}
+
+.link-preview-iframe {
+    flex: 1 1 auto;
+    width: 100%;
+    height: 100%;
+    border: none;
+    background: #f8fafc;
+}
+
+.link-preview-control {
+    position: absolute;
+    top: 2px;
+    width: 28px;
+    height: 28px;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    margin: 0;
+    padding: 0;
+    border: 1px solid rgba(79, 140, 255, 0.18);
+    border-radius: 999px;
+    background: rgba(255, 255, 255, 0.96);
+    box-shadow: 0 2px 8px rgba(15, 23, 42, 0.08);
+    color: #1d4ed8;
+    cursor: pointer;
+    appearance: none;
+    -webkit-appearance: none;
+}
+
+.link-preview-control:hover {
+    background: #dbeafe;
+}
+
+.link-preview-control:focus-visible {
+    outline: 2px solid #2563eb;
+    outline-offset: 1px;
+}
+
+.link-preview-control svg {
+    width: 16px;
+    height: 16px;
+    fill: none;
+    stroke: currentColor;
+    stroke-width: 1.8;
+    stroke-linecap: round;
+    stroke-linejoin: round;
+    pointer-events: none;
+}
+
+.link-preview-control--newtab {
+    right: 76px;
+}
+
+.link-preview-control--reload {
+    right: 44px;
+}
+
+.link-preview-control--close {
+    right: 12px;
+}
+
+.link-preview-resize-handle {
+    position: absolute;
+    right: 4px;
+    bottom: 4px;
+    z-index: 3;
+    width: 14px;
+    height: 14px;
+    border-radius: 4px;
+    background: linear-gradient(135deg, rgba(79, 140, 255, 0.85), rgba(0, 224, 198, 0.85));
+    cursor: se-resize;
+}
+
+.link-preview-resize-handle::before {
+    content: "";
+    position: absolute;
+    inset: 3px;
+    border-right: 1.5px solid rgba(255, 255, 255, 0.95);
+    border-bottom: 1.5px solid rgba(255, 255, 255, 0.95);
+}
+
+.link-preview-fallback {
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+    width: 100%;
+    height: 100%;
+    padding: 14px;
+    background: #f8fafc;
+    color: #1f2937;
+    font-size: 13px;
+    line-height: 1.35;
+}
+
+.link-preview-fallback-url {
+    padding: 8px;
+    border: 1px solid #d1d5db;
+    border-radius: 6px;
+    background: #ffffff;
+    word-break: break-all;
+}
+
+.link-preview-fallback-actions {
+    display: flex;
+    gap: 8px;
+    flex-wrap: wrap;
+}
+
+.link-preview-fallback-action {
+    min-height: 32px;
+    padding: 0 12px;
+    border: 1px solid #cbd5e1;
+    border-radius: 8px;
+    background: #ffffff;
+    color: #0f172a;
+    cursor: pointer;
+    appearance: none;
+    -webkit-appearance: none;
+}
+
+.link-preview-fallback-action:hover {
+    background: #f1f5f9;
+}
+
+.link-preview-fallback-action:focus-visible {
+    outline: 2px solid #2563eb;
+    outline-offset: 1px;
+}
+
+.link-preview-fallback-action--primary {
+    border-color: #2563eb;
+    background: #2563eb;
+    color: #ffffff;
+}
+
+.link-preview-fallback-action--primary:hover {
+    background: #1d4ed8;
+}
+`;
+const POPUP_CONTROL_ICON_MARKUP = {
+    newtab: '<svg viewBox="0 0 20 20" aria-hidden="true"><path d="M7 13L14 6"></path><path d="M9 6h5v5"></path><path d="M6 9v5h5"></path></svg>',
+    reload: '<svg viewBox="0 0 20 20" aria-hidden="true"><path d="M16 10a6 6 0 1 1-2.1-4.58"></path><path d="M16 4v4h-4"></path></svg>',
+    close: '<svg viewBox="0 0 20 20" aria-hidden="true"><path d="M6 6l8 8"></path><path d="M14 6l-8 8"></path></svg>'
+};
 
 function applyPopupCoordinates(popupEntry, left, top) {
     if (!popupEntry || !popupEntry.popup) return;
@@ -633,6 +817,19 @@ function getTopBarDragProbePoints(topBarEl) {
         .filter((point) => Number.isFinite(point.x) && Number.isFinite(point.y));
 }
 
+function getPopupHitElementAtPoint(popupEntry, point) {
+    if (!point) return null;
+    const hitEl = document.elementFromPoint(point.x, point.y);
+    if (!popupEntry || !popupEntry.popup || hitEl !== popupEntry.popup) {
+        return hitEl;
+    }
+    const shadowRoot = popupEntry.shadowRoot;
+    if (shadowRoot && typeof shadowRoot.elementFromPoint === 'function') {
+        return shadowRoot.elementFromPoint(point.x, point.y) || hitEl;
+    }
+    return hitEl;
+}
+
 function isTopBarProbeAccessible(popupEntry, point) {
     if (!popupEntry || !popupEntry.topBar || !point) return false;
     const viewportWidth = window.innerWidth;
@@ -646,8 +843,8 @@ function isTopBarProbeAccessible(popupEntry, point) {
         return false;
     }
 
-    const hitEl = document.elementFromPoint(point.x, point.y);
-    return !!(hitEl && popupEntry.topBar.contains(hitEl));
+    const hitEl = getPopupHitElementAtPoint(popupEntry, point);
+    return !!(hitEl && (hitEl === popupEntry.topBar || popupEntry.topBar.contains(hitEl)));
 }
 
 function getRequiredAccessibleTop(popupEntry) {
@@ -675,7 +872,7 @@ function getRequiredAccessibleTop(popupEntry) {
 
         if (isTopBarProbeAccessible(popupEntry, point)) return;
 
-        const blockerEl = document.elementFromPoint(point.x, point.y);
+        const blockerEl = getPopupHitElementAtPoint(popupEntry, point);
         if (!blockerEl) return;
 
         const blockerRect = blockerEl.getBoundingClientRect();
@@ -844,6 +1041,23 @@ function getPreviewIdentityKey(originalUrl) {
     return normalizePreviewIdentityFallback(originalUrl);
 }
 
+function createPopupShadowStyle() {
+    const style = document.createElement('style');
+    style.textContent = POPUP_CHROME_SHADOW_STYLES;
+    return style;
+}
+
+function createPopupControlButton(modifierClass, label, iconName, onClick) {
+    const button = document.createElement('button');
+    button.type = 'button';
+    button.className = `link-preview-control ${modifierClass}`;
+    button.setAttribute('aria-label', label);
+    button.title = label;
+    button.innerHTML = POPUP_CONTROL_ICON_MARKUP[iconName];
+    button.addEventListener('click', onClick);
+    return button;
+}
+
 function createPopup(url, x, y, anchorRect) {
     const previewIdentityKey = getPreviewIdentityKey(url);
     const existingPopup = popups.find((p) => p.previewIdentityKey === previewIdentityKey);
@@ -871,6 +1085,7 @@ function createPopup(url, x, y, anchorRect) {
         activeAttemptId: 0,
         state: 'loading',
         popup: null,
+        shadowRoot: null,
         topBar: null,
         bodyContainer: null,
         iframe: null,
@@ -888,23 +1103,25 @@ function createPopup(url, x, y, anchorRect) {
     };
 
     let popup = document.createElement('div');
+    const shadowRoot = popup.attachShadow({ mode: 'open' });
     // Assign initial stacking order
     popup.style.zIndex = ++zIndexCounter;
     popup.className = 'link-preview-popup';
     popup.style.left = '-10000px';
     popup.style.top = '-10000px';
     popup.style.opacity = '0';
-    popup.style.transition = 'opacity 0.3s';
+    popup.style.transition = 'opacity 0.3s, transform 0.3s, border-color 0.2s ease, box-shadow 0.2s ease';
+    shadowRoot.appendChild(createPopupShadowStyle());
 
     // Top bar
     let topBar = document.createElement('div');
     topBar.className = 'link-preview-topbar';
-    popup.appendChild(topBar);
+    shadowRoot.appendChild(topBar);
 
     // Create scrollable body container
     let bodyContainer = document.createElement('div');
     bodyContainer.className = 'link-preview-body';
-    popup.appendChild(bodyContainer);
+    shadowRoot.appendChild(bodyContainer);
 
     // Loading bar
     let loadingBar = document.createElement('div');
@@ -913,35 +1130,30 @@ function createPopup(url, x, y, anchorRect) {
     popupEntry.loadingBar = loadingBar;
 
     // New tab button
-    let newTabBtn = document.createElement('button');
-    newTabBtn.className = 'link-preview-newtab';
-    newTabBtn.innerText = '↗';
-    newTabBtn.onclick = () => {
+    let newTabBtn = createPopupControlButton('link-preview-control--newtab', 'Open preview in new tab', 'newtab', () => {
         window.open(popupEntry.originalUrl || popupEntry.requestedUrl, '_blank');
         closePopup(popupEntry.popupId);
-    };
+    });
     topBar.appendChild(newTabBtn);
 
     // Reload button
-    let reloadBtn = document.createElement('button');
-    reloadBtn.className = 'link-preview-reload';
-    reloadBtn.innerText = '⟳';
-    reloadBtn.onclick = () => {
+    let reloadBtn = createPopupControlButton('link-preview-control--reload', 'Reload preview', 'reload', () => {
         reloadPopup(popupEntry.popupId);
-    };
+    });
     topBar.appendChild(reloadBtn);
 
     // Close button
-    let closeBtn = document.createElement('button');
-    closeBtn.className = 'link-preview-close';
-    closeBtn.innerText = '✖';
-    closeBtn.onclick = () => closePopup(popupEntry.popupId);
+    let closeBtn = createPopupControlButton('link-preview-control--close', 'Close preview', 'close', () => {
+        closePopup(popupEntry.popupId);
+    });
     topBar.appendChild(closeBtn);
 
     document.body.appendChild(popup);
     popupEntry.popup = popup;
+    popupEntry.shadowRoot = shadowRoot;
     popupEntry.topBar = topBar;
     popupEntry.bodyContainer = bodyContainer;
+    popups.push(popupEntry);
 
     const measuredWidth = popup.offsetWidth || popup.getBoundingClientRect().width || 0;
     const measuredHeight = popup.offsetHeight || popup.getBoundingClientRect().height || 0;
@@ -1015,8 +1227,6 @@ function createPopup(url, x, y, anchorRect) {
         });
     });
 
-    // Store popup reference with position
-    popups.push(popupEntry);
 }
 
 function closePopup(popupId) {
@@ -1081,42 +1291,29 @@ function renderPopupFallback(popupEntry, message, state) {
     const fallbackUrl = popupEntry.originalUrl || popupEntry.requestedUrl;
     const fallback = document.createElement('div');
     fallback.className = 'link-preview-fallback';
-    fallback.style.display = 'flex';
-    fallback.style.flexDirection = 'column';
-    fallback.style.gap = '10px';
-    fallback.style.padding = '14px';
-    fallback.style.fontSize = '13px';
-    fallback.style.lineHeight = '1.35';
-    fallback.style.color = '#1f2937';
-    fallback.style.background = '#f8fafc';
-    fallback.style.height = '100%';
-    fallback.style.boxSizing = 'border-box';
 
     const messageNode = document.createElement('div');
     messageNode.textContent = message;
     fallback.appendChild(messageNode);
 
     const urlNode = document.createElement('div');
+    urlNode.className = 'link-preview-fallback-url';
     urlNode.textContent = fallbackUrl;
-    urlNode.style.wordBreak = 'break-all';
-    urlNode.style.padding = '8px';
-    urlNode.style.borderRadius = '6px';
-    urlNode.style.background = '#ffffff';
-    urlNode.style.border = '1px solid #d1d5db';
     fallback.appendChild(urlNode);
 
     const actions = document.createElement('div');
-    actions.style.display = 'flex';
-    actions.style.gap = '8px';
+    actions.className = 'link-preview-fallback-actions';
 
     const openBtn = document.createElement('button');
-    openBtn.className = 'link-preview-fallback-open';
+    openBtn.type = 'button';
+    openBtn.className = 'link-preview-fallback-action link-preview-fallback-action--primary';
     openBtn.textContent = 'Open in new tab';
     openBtn.onclick = () => window.open(fallbackUrl, '_blank');
     actions.appendChild(openBtn);
 
     const copyBtn = document.createElement('button');
-    copyBtn.className = 'link-preview-fallback-copy';
+    copyBtn.type = 'button';
+    copyBtn.className = 'link-preview-fallback-action';
     copyBtn.textContent = 'Copy link';
     copyBtn.onclick = async () => {
         try {
@@ -1262,8 +1459,6 @@ function mountPopupIframe(popupEntry, url) {
 
     const iframe = document.createElement('iframe');
     iframe.className = 'link-preview-iframe';
-    iframe.dataset.popupId = popupEntry.popupId;
-    iframe.dataset.attemptId = String(attemptId);
     iframe.src = url;
     popupEntry.iframe = iframe;
     popupEntry.bodyContainer.appendChild(iframe);
@@ -1358,6 +1553,10 @@ function getPopupById(popupId) {
     return popups.find(p => p.popupId === popupId);
 }
 
+function getPopupByIframeWindow(sourceWindow) {
+    return popups.find((popupEntry) => popupEntry.iframe && popupEntry.iframe.contentWindow === sourceWindow) || null;
+}
+
 function reloadPopup(popupId) {
     const entry = getPopupById(popupId);
     if (!entry) return;
@@ -1365,37 +1564,27 @@ function reloadPopup(popupId) {
     loadPopupUrl(entry, reloadUrl);
 }
 
-function syncPopupCurrentUrl(popupId, currentUrl, attemptId) {
-    if (!popupId || !currentUrl) return;
-    const entry = getPopupById(popupId);
-    if (!entry) return;
-    if (attemptId && Number(attemptId) !== entry.activeAttemptId) return;
-    entry.currentUrl = currentUrl;
+function syncPopupCurrentUrlForEntry(popupEntry, currentUrl) {
+    if (!popupEntry || !currentUrl) return;
+    popupEntry.currentUrl = currentUrl;
 }
 
-function markPopupFrameAlive(popupId, attemptId, currentUrl) {
-    if (!popupId || !attemptId) return;
-    const entry = getPopupById(popupId);
-    if (!entry || Number(attemptId) !== entry.activeAttemptId) return;
-    if (currentUrl) entry.currentUrl = currentUrl;
-    if (!entry.activeCandidateFrameAlive) {
-        entry.activeCandidateFrameAlive = true;
-        const candidateState = getActiveCandidateState(entry);
+function markPopupFrameAliveForEntry(popupEntry, currentUrl) {
+    if (!popupEntry || !popupEntry.iframe) return;
+    if (currentUrl) popupEntry.currentUrl = currentUrl;
+    if (!popupEntry.activeCandidateFrameAlive) {
+        popupEntry.activeCandidateFrameAlive = true;
+        const candidateState = getActiveCandidateState(popupEntry);
         if (candidateState.requiresFrameLiveness) {
             logPreviewDebug('original/no-alternate liveness confirmation', {
-                popupId: entry.popupId,
-                attemptId: Number(attemptId),
+                popupId: popupEntry.popupId,
+                attemptId: popupEntry.activeAttemptId,
                 candidateIndex: candidateState.candidateIndex,
-                url: entry.currentPreviewUrl
+                url: popupEntry.currentPreviewUrl
             });
         }
     }
-    const candidateState = getActiveCandidateState(entry);
-    if (!candidateState.requiresFrameLiveness || entry.state !== 'loading' || !entry.activeCandidateLoaded) return;
-    if (!entry.iframe) return;
-    finalizePopupReady(entry, entry.iframe);
-}
-
-function markPopupRuntimeReady(popupId, attemptId, currentUrl) {
-    markPopupFrameAlive(popupId, attemptId, currentUrl);
+    const candidateState = getActiveCandidateState(popupEntry);
+    if (!candidateState.requiresFrameLiveness || popupEntry.state !== 'loading' || !popupEntry.activeCandidateLoaded) return;
+    finalizePopupReady(popupEntry, popupEntry.iframe);
 }
