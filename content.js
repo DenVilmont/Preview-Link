@@ -13,6 +13,7 @@ let listenersAttached = false;
 const DEBUG_PREVIEW = false;
 const ORIGINAL_LIVENESS_GRACE_MS = 1000;
 const POPUP_HARD_TIMEOUT_MS = 12000;
+let activePopupMouseInteractionCleanup = null;
 
 function logPreviewDebug(event, details) {
   if (!DEBUG_PREVIEW) return;
@@ -529,6 +530,91 @@ function applyPopupCoordinates(popupEntry, left, top) {
     popupEntry.y = top;
 }
 
+function startPopupMouseInteraction(popupEntry, options) {
+    if (!popupEntry || typeof options?.onMove !== 'function') {
+        return () => {};
+    }
+
+    if (typeof activePopupMouseInteractionCleanup === 'function') {
+        activePopupMouseInteractionCleanup();
+    }
+
+    const {
+        onMove,
+        onEnd,
+        disableIframePointerEvents = false
+    } = options;
+
+    const bodyStyle = document.body && document.body.style;
+    const previousUserSelect = bodyStyle ? bodyStyle.userSelect : '';
+    const activeIframe = disableIframePointerEvents ? popupEntry.iframe : null;
+    const previousIframePointerEvents = activeIframe ? activeIframe.style.pointerEvents : '';
+    let cleanedUp = false;
+
+    function cleanup(event) {
+        if (cleanedUp) return;
+        cleanedUp = true;
+
+        document.removeEventListener('mousemove', onDocumentMouseMove);
+        window.removeEventListener('mouseup', onWindowMouseUp, true);
+        window.removeEventListener('blur', onWindowBlur);
+
+        if (bodyStyle) {
+            bodyStyle.userSelect = previousUserSelect;
+        }
+
+        if (activeIframe && popupEntry.iframe === activeIframe) {
+            activeIframe.style.pointerEvents = previousIframePointerEvents;
+        }
+
+        if (popupEntry.activeMouseInteractionCleanup === cleanup) {
+            popupEntry.activeMouseInteractionCleanup = null;
+        }
+        if (activePopupMouseInteractionCleanup === cleanup) {
+            activePopupMouseInteractionCleanup = null;
+        }
+
+        if (typeof onEnd === 'function') {
+            onEnd(event);
+        }
+    }
+
+    function onDocumentMouseMove(event) {
+        if ((event.buttons & 1) !== 1) {
+            cleanup(event);
+            return;
+        }
+
+        onMove(event, cleanup);
+    }
+
+    function onWindowMouseUp(event) {
+        cleanup(event);
+    }
+
+    function onWindowBlur() {
+        cleanup();
+    }
+
+    popupEntry.activeMouseInteractionCleanup = cleanup;
+    activePopupMouseInteractionCleanup = cleanup;
+
+    if (bodyStyle) {
+        bodyStyle.userSelect = 'none';
+    }
+
+    if (activeIframe) {
+        // Keep the top-level document receiving drag events even when the cursor crosses the preview iframe.
+        activeIframe.style.pointerEvents = 'none';
+    }
+
+    document.addEventListener('mousemove', onDocumentMouseMove);
+    window.addEventListener('mouseup', onWindowMouseUp, true);
+    window.addEventListener('blur', onWindowBlur);
+
+    return cleanup;
+}
+
 function getTopBarDragProbePoints(topBarEl) {
     if (!topBarEl) return [];
     const rect = topBarEl.getBoundingClientRect();
@@ -796,6 +882,7 @@ function createPopup(url, x, y, anchorRect) {
         activeCandidateLoaded: false,
         activeCandidateFrameAlive: false,
         attentionTimer: null,
+        activeMouseInteractionCleanup: null,
         x,
         y
     };
@@ -880,30 +967,25 @@ function createPopup(url, x, y, anchorRect) {
         // Only initiate drag when clicking on the empty top bar area (not buttons)
         if (e.currentTarget !== e.target) return;
         e.preventDefault();
-        // Prevent text selection during drag
-        document.body.style.userSelect = 'none';
         const startX = e.clientX;
         const startY = e.clientY;
         const rect = popup.getBoundingClientRect();
         const startLeft = rect.left;
         const startTop = rect.top;
-        function onMouseMove(e) {
-            let newLeft = startLeft + (e.clientX - startX);
-            let newTop = startTop + (e.clientY - startY);
-            // Maintain viewport bounds
-            newLeft = Math.max(0, Math.min(newLeft, window.innerWidth - popup.offsetWidth));
-            newTop = Math.max(0, Math.min(newTop, window.innerHeight - popup.offsetHeight));
-            applyPopupCoordinates(popupEntry, newLeft, newTop);
-        }
-        function onMouseUp() {
-            document.removeEventListener('mousemove', onMouseMove);
-            document.removeEventListener('mouseup', onMouseUp);
-            // Restore text selection
-            document.body.style.userSelect = '';
-            ensurePopupAccessibleTopBar(popupEntry);
-        }
-        document.addEventListener('mousemove', onMouseMove);
-        document.addEventListener('mouseup', onMouseUp);
+        startPopupMouseInteraction(popupEntry, {
+            disableIframePointerEvents: true,
+            onMove(event) {
+                let newLeft = startLeft + (event.clientX - startX);
+                let newTop = startTop + (event.clientY - startY);
+                // Maintain viewport bounds
+                newLeft = Math.max(0, Math.min(newLeft, window.innerWidth - popup.offsetWidth));
+                newTop = Math.max(0, Math.min(newTop, window.innerHeight - popup.offsetHeight));
+                applyPopupCoordinates(popupEntry, newLeft, newTop);
+            },
+            onEnd() {
+                ensurePopupAccessibleTopBar(popupEntry);
+            }
+        });
     });
 
     // Add resize handle
@@ -911,40 +993,26 @@ function createPopup(url, x, y, anchorRect) {
     handle.className = 'link-preview-resize-handle';
     bodyContainer.appendChild(handle);
     handle.addEventListener('mousedown', function(e) {
-        // Prevent text selection during resize
         e.preventDefault();
         e.stopPropagation();
-        document.body.style.userSelect = 'none';
-        // Disable pointer-events for iframe
-        if (popupEntry.iframe) {
-            popupEntry.iframe.style.pointerEvents = 'none';
-        }
         const startX = e.clientX;
         const startY = e.clientY;
         const startWidth = popup.offsetWidth;
         const startHeight = popup.offsetHeight;
-        function onMouseMove(e) {
-            let newWidth = startWidth + (e.clientX - startX);
-            let newHeight = startHeight + (e.clientY - startY);
-            // Enforce minimum dimensions
-            const MIN_WIDTH = 256;
-            const MIN_HEIGHT = 128;
-            if (newWidth < MIN_WIDTH) newWidth = MIN_WIDTH;
-            if (newHeight < MIN_HEIGHT) newHeight = MIN_HEIGHT;
-            popup.style.width = newWidth + 'px';
-            popup.style.height = newHeight + 'px';
-        }
-        function onMouseUp() {
-            document.removeEventListener('mousemove', onMouseMove);
-            document.removeEventListener('mouseup', onMouseUp);
-            // Restore pointer-events and text selection after resize
-            if (popupEntry.iframe) {
-                popupEntry.iframe.style.pointerEvents = '';
+        startPopupMouseInteraction(popupEntry, {
+            disableIframePointerEvents: true,
+            onMove(event) {
+                let newWidth = startWidth + (event.clientX - startX);
+                let newHeight = startHeight + (event.clientY - startY);
+                // Enforce minimum dimensions
+                const MIN_WIDTH = 256;
+                const MIN_HEIGHT = 128;
+                if (newWidth < MIN_WIDTH) newWidth = MIN_WIDTH;
+                if (newHeight < MIN_HEIGHT) newHeight = MIN_HEIGHT;
+                popup.style.width = newWidth + 'px';
+                popup.style.height = newHeight + 'px';
             }
-            document.body.style.userSelect = '';
-        }
-        document.addEventListener('mousemove', onMouseMove);
-        document.addEventListener('mouseup', onMouseUp);
+        });
     });
 
     // Store popup reference with position
@@ -954,6 +1022,9 @@ function createPopup(url, x, y, anchorRect) {
 function closePopup(popupId) {
     const entry = getPopupById(popupId);
     if (!entry || !entry.popup) return;
+    if (typeof entry.activeMouseInteractionCleanup === 'function') {
+        entry.activeMouseInteractionCleanup();
+    }
     if (entry.attentionTimer) {
         clearTimeout(entry.attentionTimer);
         entry.attentionTimer = null;
