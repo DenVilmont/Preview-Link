@@ -516,8 +516,105 @@ function clamp(value, min, max) {
     return Math.min(Math.max(value, min), max);
 }
 
+const POPUP_GAP_PX = 10;
+const TOP_BAR_PROBE_LEFT_OFFSETS_PX = [16, 56];
+const TOP_BAR_RESCUE_MARGIN_PX = 4;
+const VIEWPORT_HIT_TEST_PADDING_PX = 1;
+
+function applyPopupCoordinates(popupEntry, left, top) {
+    if (!popupEntry || !popupEntry.popup) return;
+    popupEntry.popup.style.left = left + 'px';
+    popupEntry.popup.style.top = top + 'px';
+    popupEntry.x = left;
+    popupEntry.y = top;
+}
+
+function getTopBarDragProbePoints(topBarEl) {
+    if (!topBarEl) return [];
+    const rect = topBarEl.getBoundingClientRect();
+    if (rect.width <= 0 || rect.height <= 0) return [];
+    const probeY = rect.top + (rect.height / 2);
+
+    return TOP_BAR_PROBE_LEFT_OFFSETS_PX
+        .map((offset) => {
+            const maxOffset = Math.max(
+                VIEWPORT_HIT_TEST_PADDING_PX,
+                Math.min(rect.width - VIEWPORT_HIT_TEST_PADDING_PX, rect.width / 3)
+            );
+            const probeX = rect.left + Math.min(offset, maxOffset);
+            return { x: probeX, y: probeY };
+        })
+        .filter((point) => Number.isFinite(point.x) && Number.isFinite(point.y));
+}
+
+function isTopBarProbeAccessible(popupEntry, point) {
+    if (!popupEntry || !popupEntry.topBar || !point) return false;
+    const viewportWidth = window.innerWidth;
+    const viewportHeight = window.innerHeight;
+    if (
+        point.x < VIEWPORT_HIT_TEST_PADDING_PX ||
+        point.y < VIEWPORT_HIT_TEST_PADDING_PX ||
+        point.x > viewportWidth - VIEWPORT_HIT_TEST_PADDING_PX ||
+        point.y > viewportHeight - VIEWPORT_HIT_TEST_PADDING_PX
+    ) {
+        return false;
+    }
+
+    const hitEl = document.elementFromPoint(point.x, point.y);
+    return !!(hitEl && popupEntry.topBar.contains(hitEl));
+}
+
+function getRequiredAccessibleTop(popupEntry) {
+    if (!popupEntry || !popupEntry.popup || !popupEntry.topBar) return 0;
+
+    const popupRect = popupEntry.popup.getBoundingClientRect();
+    const popupHeight = popupEntry.popup.offsetHeight || popupRect.height || 0;
+    const currentTop = Number.isFinite(popupEntry.y) ? popupEntry.y : popupRect.top;
+    const probePoints = getTopBarDragProbePoints(popupEntry.topBar);
+    const viewportMaxTop = Math.max(0, window.innerHeight - popupHeight);
+    let requiredTop = currentTop;
+    let rescueNeeded = false;
+
+    probePoints.forEach((point) => {
+        const relativeProbeY = point.y - popupRect.top;
+
+        if (point.y < VIEWPORT_HIT_TEST_PADDING_PX) {
+            requiredTop = Math.max(
+                requiredTop,
+                VIEWPORT_HIT_TEST_PADDING_PX - relativeProbeY
+            );
+            rescueNeeded = true;
+            return;
+        }
+
+        if (isTopBarProbeAccessible(popupEntry, point)) return;
+
+        const blockerEl = document.elementFromPoint(point.x, point.y);
+        if (!blockerEl) return;
+
+        const blockerRect = blockerEl.getBoundingClientRect();
+        requiredTop = Math.max(
+            requiredTop,
+            blockerRect.bottom + TOP_BAR_RESCUE_MARGIN_PX - relativeProbeY
+        );
+        rescueNeeded = true;
+    });
+
+    if (!rescueNeeded) return currentTop;
+    return clamp(requiredTop, 0, viewportMaxTop);
+}
+
+function ensurePopupAccessibleTopBar(popupEntry) {
+    if (!popupEntry || !popupEntry.popup) return;
+    const popupRect = popupEntry.popup.getBoundingClientRect();
+    const left = Number.isFinite(popupEntry.x) ? popupEntry.x : popupRect.left;
+    const currentTop = Number.isFinite(popupEntry.y) ? popupEntry.y : popupRect.top;
+    const requiredTop = getRequiredAccessibleTop(popupEntry);
+    if (requiredTop <= currentTop || Math.abs(requiredTop - currentTop) < 1) return;
+    applyPopupCoordinates(popupEntry, left, requiredTop);
+}
+
 function calculatePopupPosition(anchorRect, popupWidth, popupHeight) {
-    const GAP = 10;
     const viewportWidth = window.innerWidth;
     const viewportHeight = window.innerHeight;
     const fallbackAnchor = {
@@ -528,8 +625,8 @@ function calculatePopupPosition(anchorRect, popupWidth, popupHeight) {
     };
     const anchor = anchorRect || fallbackAnchor;
 
-    const rightX = anchor.rectRight + GAP;
-    const leftX = anchor.rectLeft - popupWidth - GAP;
+    const rightX = anchor.rectRight + POPUP_GAP_PX;
+    const leftX = anchor.rectLeft - popupWidth - POPUP_GAP_PX;
     const canFitRight = rightX + popupWidth <= viewportWidth;
     const canFitLeft = leftX >= 0;
     let x = canFitRight ? rightX : leftX;
@@ -755,6 +852,9 @@ function createPopup(url, x, y, anchorRect) {
     topBar.appendChild(closeBtn);
 
     document.body.appendChild(popup);
+    popupEntry.popup = popup;
+    popupEntry.topBar = topBar;
+    popupEntry.bodyContainer = bodyContainer;
 
     const measuredWidth = popup.offsetWidth || popup.getBoundingClientRect().width || 0;
     const measuredHeight = popup.offsetHeight || popup.getBoundingClientRect().height || 0;
@@ -765,14 +865,11 @@ function createPopup(url, x, y, anchorRect) {
         rectBottom: y
     };
     const position = calculatePopupPosition(anchorRect || fallbackRect, measuredWidth, measuredHeight);
-    popup.style.left = position.x + 'px';
-    popup.style.top = position.y + 'px';
-    popupEntry.x = position.x;
-    popupEntry.y = position.y;
+    applyPopupCoordinates(popupEntry, position.x, position.y);
 
-    popupEntry.popup = popup;
-    popupEntry.topBar = topBar;
-    popupEntry.bodyContainer = bodyContainer;
+    requestAnimationFrame(() => {
+        ensurePopupAccessibleTopBar(popupEntry);
+    });
     // Bring this popup to front when clicking on its container (including top bar)
     popup.addEventListener('mousedown', () => bringToFront(popupEntry.popupId));
     setTimeout(() => { popup.style.opacity = '1'; }, 10);
@@ -796,16 +893,14 @@ function createPopup(url, x, y, anchorRect) {
             // Maintain viewport bounds
             newLeft = Math.max(0, Math.min(newLeft, window.innerWidth - popup.offsetWidth));
             newTop = Math.max(0, Math.min(newTop, window.innerHeight - popup.offsetHeight));
-            popup.style.left = newLeft + 'px';
-            popup.style.top = newTop + 'px';
-            popupEntry.x = newLeft;
-            popupEntry.y = newTop;
+            applyPopupCoordinates(popupEntry, newLeft, newTop);
         }
         function onMouseUp() {
             document.removeEventListener('mousemove', onMouseMove);
             document.removeEventListener('mouseup', onMouseUp);
             // Restore text selection
             document.body.style.userSelect = '';
+            ensurePopupAccessibleTopBar(popupEntry);
         }
         document.addEventListener('mousemove', onMouseMove);
         document.addEventListener('mouseup', onMouseUp);
@@ -970,6 +1065,9 @@ function renderPopupFallback(popupEntry, message, state) {
     if (popupEntry.bodyContainer) {
         popupEntry.bodyContainer.appendChild(fallback);
     }
+    requestAnimationFrame(() => {
+        ensurePopupAccessibleTopBar(popupEntry);
+    });
 }
 
 function clearPopupBodyContent(popupEntry) {
