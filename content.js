@@ -580,6 +580,53 @@ button {
     cursor: move;
 }
 
+.link-preview-topbar-action {
+    position: absolute;
+    top: 4px;
+    left: 12px;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    min-height: 24px;
+    margin: 0;
+    padding: 0 10px;
+    border: 1px solid rgba(79, 140, 255, 0.22);
+    border-radius: 999px;
+    background: rgba(255, 255, 255, 0.96);
+    box-shadow: 0 1px 4px rgba(15, 23, 42, 0.08);
+    color: #1d4ed8;
+    font-size: 12px;
+    font-weight: 600;
+    line-height: 1;
+    white-space: nowrap;
+    cursor: pointer;
+    appearance: none;
+    -webkit-appearance: none;
+}
+
+.link-preview-topbar-action:hover {
+    background: #dbeafe;
+    border-color: rgba(59, 130, 246, 0.38);
+    color: #1e40af;
+}
+
+.link-preview-topbar-action:focus-visible {
+    outline: 2px solid #2563eb;
+    outline-offset: 1px;
+}
+
+.link-preview-topbar-action:active {
+    background: #bfdbfe;
+}
+
+.link-preview-topbar-action[hidden] {
+    display: none !important;
+}
+
+.link-preview-topbar-action:disabled {
+    pointer-events: none;
+}
+
 .link-preview-body {
     position: relative;
     display: flex;
@@ -744,6 +791,13 @@ const POPUP_CONTROL_ICON_MARKUP = {
     newtab: '<svg viewBox="0 0 20 20" aria-hidden="true"><path d="M7 13L14 6"></path><path d="M9 6h5v5"></path><path d="M6 9v5h5"></path></svg>',
     reload: '<svg viewBox="0 0 20 20" aria-hidden="true"><path d="M16 10a6 6 0 1 1-2.1-4.58"></path><path d="M16 4v4h-4"></path></svg>',
     close: '<svg viewBox="0 0 20 20" aria-hidden="true"><path d="M6 6l8 8"></path><path d="M14 6l-8 8"></path></svg>'
+};
+const POPUP_HEADER_LABELS = {
+    openInNewTab: 'Open preview in new tab',
+    reloadPreview: 'Reload preview',
+    closePreview: 'Close preview',
+    closeAllText: 'Close all',
+    closeAllAriaLabel: 'Close all preview popups on this page'
 };
 
 function applyPopupCoordinates(popupEntry, left, top) {
@@ -1098,6 +1152,34 @@ function createPopupControlButton(modifierClass, label, iconName, onClick) {
     return button;
 }
 
+function createPopupTextActionButton(modifierClass, text, label, onClick) {
+    const button = document.createElement('button');
+    button.type = 'button';
+    button.className = `link-preview-topbar-action ${modifierClass}`;
+    button.textContent = text;
+    button.setAttribute('aria-label', label);
+    button.title = label;
+    button.addEventListener('click', onClick);
+    return button;
+}
+
+function syncPopupCollectionActions() {
+    const activePopupCount = popups.reduce((count, popupEntry) => {
+        return popupEntry.isClosing ? count : count + 1;
+    }, 0);
+    const shouldShowCloseAll = activePopupCount >= 2;
+    popups.forEach((popupEntry) => {
+        if (popupEntry.closeAllButton) {
+            popupEntry.closeAllButton.hidden = !shouldShowCloseAll;
+            popupEntry.closeAllButton.disabled = !shouldShowCloseAll;
+        }
+    });
+}
+
+function closeAllPopups() {
+    popups.slice().forEach((popupEntry) => closePopup(popupEntry.popupId));
+}
+
 function createPopup(url, x, y, anchorRect) {
     const previewIdentityKey = getPreviewIdentityKey(url);
     const existingPopup = popups.find((p) => p.previewIdentityKey === previewIdentityKey);
@@ -1131,6 +1213,7 @@ function createPopup(url, x, y, anchorRect) {
         iframe: null,
         fallback: null,
         loadingBar: null,
+        closeAllButton: null,
         loadingAnimationTimer: null,
         blockedTimeoutTimer: null,
         postLoadGraceTimer: null,
@@ -1138,6 +1221,7 @@ function createPopup(url, x, y, anchorRect) {
         activeCandidateFrameAlive: false,
         attentionTimer: null,
         activeMouseInteractionCleanup: null,
+        isClosing: false,
         x,
         y
     };
@@ -1161,6 +1245,18 @@ function createPopup(url, x, y, anchorRect) {
     topBar.className = 'link-preview-topbar';
     shadowRoot.appendChild(topBar);
 
+    let closeAllBtn = createPopupTextActionButton(
+        'link-preview-topbar-action--close-all',
+        POPUP_HEADER_LABELS.closeAllText,
+        POPUP_HEADER_LABELS.closeAllAriaLabel,
+        () => {
+            closeAllPopups();
+        }
+    );
+    closeAllBtn.hidden = true;
+    closeAllBtn.disabled = true;
+    topBar.appendChild(closeAllBtn);
+
     // Create scrollable body container
     let bodyContainer = document.createElement('div');
     bodyContainer.className = 'link-preview-body';
@@ -1173,20 +1269,20 @@ function createPopup(url, x, y, anchorRect) {
     popupEntry.loadingBar = loadingBar;
 
     // New tab button
-    let newTabBtn = createPopupControlButton('link-preview-control--newtab', 'Open preview in new tab', 'newtab', () => {
+    let newTabBtn = createPopupControlButton('link-preview-control--newtab', POPUP_HEADER_LABELS.openInNewTab, 'newtab', () => {
         window.open(popupEntry.originalUrl || popupEntry.requestedUrl, '_blank');
         closePopup(popupEntry.popupId);
     });
     topBar.appendChild(newTabBtn);
 
     // Reload button
-    let reloadBtn = createPopupControlButton('link-preview-control--reload', 'Reload preview', 'reload', () => {
+    let reloadBtn = createPopupControlButton('link-preview-control--reload', POPUP_HEADER_LABELS.reloadPreview, 'reload', () => {
         reloadPopup(popupEntry.popupId);
     });
     topBar.appendChild(reloadBtn);
 
     // Close button
-    let closeBtn = createPopupControlButton('link-preview-control--close', 'Close preview', 'close', () => {
+    let closeBtn = createPopupControlButton('link-preview-control--close', POPUP_HEADER_LABELS.closePreview, 'close', () => {
         closePopup(popupEntry.popupId);
     });
     topBar.appendChild(closeBtn);
@@ -1196,7 +1292,9 @@ function createPopup(url, x, y, anchorRect) {
     popupEntry.shadowRoot = shadowRoot;
     popupEntry.topBar = topBar;
     popupEntry.bodyContainer = bodyContainer;
+    popupEntry.closeAllButton = closeAllBtn;
     popups.push(popupEntry);
+    syncPopupCollectionActions();
 
     const measuredWidth = popup.offsetWidth || popup.getBoundingClientRect().width || 0;
     const measuredHeight = popup.offsetHeight || popup.getBoundingClientRect().height || 0;
@@ -1272,7 +1370,9 @@ function createPopup(url, x, y, anchorRect) {
 
 function closePopup(popupId) {
     const entry = getPopupById(popupId);
-    if (!entry || !entry.popup) return;
+    if (!entry || !entry.popup || entry.isClosing) return;
+    entry.isClosing = true;
+    syncPopupCollectionActions();
     if (typeof entry.activeMouseInteractionCleanup === 'function') {
         entry.activeMouseInteractionCleanup();
     }
@@ -1281,6 +1381,7 @@ function closePopup(popupId) {
         entry.attentionTimer = null;
     }
     clearPopupLoadLifecycle(entry);
+    entry.popup.style.pointerEvents = 'none';
     entry.popup.style.opacity = '0';
     setTimeout(() => {
         if (entry.popup) entry.popup.remove();
