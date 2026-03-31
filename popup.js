@@ -9,6 +9,24 @@ document.addEventListener('DOMContentLoaded', () => {
   const setKeyBtn = document.getElementById('set-key-btn');
   const keyDisplay = document.getElementById('key-display');
   const delayContainer = document.getElementById('delay-container');
+  const popupSizeUnitPercent = document.getElementById('popup-size-unit-percent');
+  const popupSizeUnitPx = document.getElementById('popup-size-unit-px');
+  const popupWidthInput = document.getElementById('popup-width');
+  const popupHeightInput = document.getElementById('popup-height');
+  const previewSizeHelper = document.getElementById('preview-size-helper');
+  const popupWidthError = document.getElementById('popup-width-error');
+  const popupHeightError = document.getElementById('popup-height-error');
+  const {
+    POPUP_MIN_WIDTH,
+    POPUP_MIN_HEIGHT,
+    POPUP_PERCENT_MIN,
+    POPUP_PERCENT_MAX,
+    DEFAULT_POPUP_SIZE_UNIT,
+    PREVIEW_SIZE_UNIT_DEFAULTS,
+    getDefaultPreviewSizeForUnit,
+    isValidPopupSizeValue,
+    normalizePreviewSizeSettings
+  } = globalThis.PreviewSizeConfig;
 
   function normalizeInteractionType(value) {
     if (value === 'button') return 'hoverWithKey';
@@ -30,6 +48,109 @@ document.addEventListener('DOMContentLoaded', () => {
     if (Object.keys(updates).length > 0) {
       chrome.storage.local.set(updates);
     }
+  }
+
+  function getSelectedPopupSizeUnit() {
+    return popupSizeUnitPx.checked ? 'px' : 'percent';
+  }
+
+  function updatePreviewSizeHelper(unit) {
+    previewSizeHelper.textContent = unit === 'px'
+      ? `Minimum: width ${POPUP_MIN_WIDTH}px, height ${POPUP_MIN_HEIGHT}px`
+      : `Allowed range: ${POPUP_PERCENT_MIN}-${POPUP_PERCENT_MAX}%`;
+  }
+
+  function updatePreviewSizeInputAttributes(unit) {
+    if (unit === 'px') {
+      popupWidthInput.min = String(POPUP_MIN_WIDTH);
+      popupWidthInput.max = '';
+      popupHeightInput.min = String(POPUP_MIN_HEIGHT);
+      popupHeightInput.max = '';
+      return;
+    }
+
+    popupWidthInput.min = String(POPUP_PERCENT_MIN);
+    popupWidthInput.max = String(POPUP_PERCENT_MAX);
+    popupHeightInput.min = String(POPUP_PERCENT_MIN);
+    popupHeightInput.max = String(POPUP_PERCENT_MAX);
+  }
+
+  function renderPreviewSizeErrors(errors) {
+    const widthError = errors.popupWidth || '';
+    const heightError = errors.popupHeight || '';
+
+    popupWidthError.textContent = widthError;
+    popupHeightError.textContent = heightError;
+    popupWidthInput.classList.toggle('input-invalid', !!widthError);
+    popupHeightInput.classList.toggle('input-invalid', !!heightError);
+  }
+
+  function renderPreviewSizeSettings(settings) {
+    popupSizeUnitPercent.checked = settings.popupSizeUnit === 'percent';
+    popupSizeUnitPx.checked = settings.popupSizeUnit === 'px';
+    popupWidthInput.value = settings.popupWidth;
+    popupHeightInput.value = settings.popupHeight;
+    updatePreviewSizeHelper(settings.popupSizeUnit);
+    updatePreviewSizeInputAttributes(settings.popupSizeUnit);
+    renderPreviewSizeErrors({});
+  }
+
+  function parsePreviewSizeInputValue(value) {
+    return Number(value);
+  }
+
+  function getPreviewSizeValidationErrors(settings) {
+    const errors = {};
+
+    if (!isValidPopupSizeValue(settings.popupSizeUnit, 'width', settings.popupWidth)) {
+      errors.popupWidth = settings.popupSizeUnit === 'px'
+        ? `Minimum width is ${POPUP_MIN_WIDTH}px`
+        : `Enter a value from ${POPUP_PERCENT_MIN} to ${POPUP_PERCENT_MAX}`;
+    }
+
+    if (!isValidPopupSizeValue(settings.popupSizeUnit, 'height', settings.popupHeight)) {
+      errors.popupHeight = settings.popupSizeUnit === 'px'
+        ? `Minimum height is ${POPUP_MIN_HEIGHT}px`
+        : `Enter a value from ${POPUP_PERCENT_MIN} to ${POPUP_PERCENT_MAX}`;
+    }
+
+    return errors;
+  }
+
+  function getPreviewSizeSettingsFromForm() {
+    return {
+      popupSizeUnit: getSelectedPopupSizeUnit(),
+      popupWidth: parsePreviewSizeInputValue(popupWidthInput.value),
+      popupHeight: parsePreviewSizeInputValue(popupHeightInput.value)
+    };
+  }
+
+  function attemptSavePreviewSizeSettings() {
+    const previewSizeSettings = getPreviewSizeSettingsFromForm();
+    const errors = getPreviewSizeValidationErrors(previewSizeSettings);
+
+    updatePreviewSizeHelper(previewSizeSettings.popupSizeUnit);
+    updatePreviewSizeInputAttributes(previewSizeSettings.popupSizeUnit);
+    renderPreviewSizeErrors(errors);
+
+    if (Object.keys(errors).length > 0) {
+      return false;
+    }
+
+    chrome.storage.local.set(previewSizeSettings);
+    return true;
+  }
+
+  function resetPreviewSizeSettingsForUnit(unit) {
+    const defaults = getDefaultPreviewSizeForUnit(unit);
+    const previewSizeSettings = {
+      popupSizeUnit: unit,
+      popupWidth: defaults.width,
+      popupHeight: defaults.height
+    };
+
+    renderPreviewSizeSettings(previewSizeSettings);
+    chrome.storage.local.set(previewSizeSettings);
   }
 
   // Helper to display a readable label from KeyboardEvent.code
@@ -71,16 +192,21 @@ document.addEventListener('DOMContentLoaded', () => {
       hoverDelay: 2000,
       interactionType: 'hover',
       triggerKey: '',
-      interactionKey: ''
+      interactionKey: '',
+      popupSizeUnit: DEFAULT_POPUP_SIZE_UNIT,
+      popupWidth: PREVIEW_SIZE_UNIT_DEFAULTS.percent.width,
+      popupHeight: PREVIEW_SIZE_UNIT_DEFAULTS.percent.height
     },
     (data) => {
       const interactionType = normalizeInteractionType(data.interactionType);
       const triggerKey = normalizeTriggerKey(data);
+      const previewSizeSettings = normalizePreviewSizeSettings(data);
       migrateSettingsIfNeeded(data);
 
       toggle.checked = data.enabled;
       maxInput.value = data.maxPopups;
       renderInteractionSettings(interactionType, data.hoverDelay, triggerKey);
+      renderPreviewSizeSettings(previewSizeSettings);
     }
   );
 
@@ -123,6 +249,26 @@ document.addEventListener('DOMContentLoaded', () => {
         renderInteractionSettings('hoverWithKey', settings.hoverDelay, triggerKey);
       });
     }
+  });
+
+  popupSizeUnitPercent.addEventListener('change', () => {
+    if (popupSizeUnitPercent.checked) {
+      resetPreviewSizeSettingsForUnit('percent');
+    }
+  });
+
+  popupSizeUnitPx.addEventListener('change', () => {
+    if (popupSizeUnitPx.checked) {
+      resetPreviewSizeSettingsForUnit('px');
+    }
+  });
+
+  popupWidthInput.addEventListener('change', () => {
+    attemptSavePreviewSizeSettings();
+  });
+
+  popupHeightInput.addEventListener('change', () => {
+    attemptSavePreviewSizeSettings();
   });
 
   // Key capture button: listen for the next key regardless of layout

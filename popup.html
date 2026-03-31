@@ -3,10 +3,11 @@
 <head>
   <meta charset="UTF-8">
   <title>Preview Link</title>
+  <script src="preview-size-config.js" defer></script>
   <script src="popup.js" defer></script>
   <style>
     :root { --accent: #4f8cff; --bg: #fcfcfc; --text: #333333; --light: #f0f4ff; }
-    body { margin:0; padding:16px; font-family: Arial, sans-serif; background: var(--bg); color: var(--text); width: 260px;
+    body { margin:0; padding:16px; font-family: Arial, sans-serif; background: var(--bg); color: var(--text); width: 280px;
       border-radius: 8px;
       box-shadow: 0 4px 16px rgba(0,0,0,0.1);
       transition: box-shadow 0.2s ease;
@@ -44,8 +45,60 @@
     #interaction-setting > label {
       margin-bottom: 8px;
     }
+    #preview-size-setting {
+      display: flex;
+      flex-direction: column;
+      align-items: stretch;
+      gap: 8px;
+    }
+    #preview-size-setting > label {
+      margin-bottom: 0;
+    }
+    .preview-size-options {
+      display: flex;
+      flex-direction: column;
+      gap: 10px;
+      box-sizing: border-box;
+      padding: 0 8px 0 4px;
+    }
+    .preview-size-unit-group {
+      display: flex;
+      gap: 12px;
+      flex-wrap: wrap;
+    }
+    .preview-size-grid {
+      display: grid;
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+      column-gap: 16px;
+      row-gap: 12px;
+      box-sizing: border-box;
+    }
+    .preview-size-field {
+      display: flex;
+      flex-direction: column;
+      gap: 4px;
+      min-width: 0;
+    }
+    .preview-size-field input[type="number"] {
+      width: 100%;
+      box-sizing: border-box;
+    }
+    .helper-text {
+      margin: 0;
+      font-size: 12px;
+      color: #666666;
+    }
+    .field-error {
+      min-height: 14px;
+      font-size: 12px;
+      color: #c62828;
+    }
+    .input-invalid {
+      border-color: #c62828 !important;
+    }
     /* Modern style for radio buttons */
-    #interaction-setting input[type="radio"] {
+    #interaction-setting input[type="radio"],
+    #preview-size-setting input[type="radio"] {
       -webkit-appearance: none;
       appearance: none;
       width: 16px;
@@ -57,7 +110,8 @@
       cursor: pointer;
       transition: background 0.2s, border-color 0.2s;
     }
-    #interaction-setting input[type="radio"]::after {
+    #interaction-setting input[type="radio"]::after,
+    #preview-size-setting input[type="radio"]::after {
       content: '';
       position: absolute;
       top: 50%;
@@ -69,11 +123,13 @@
       transform: translate(-50%, -50%) scale(0);
       transition: transform 0.2s;
     }
-    #interaction-setting input[type="radio"]:checked {
+    #interaction-setting input[type="radio"]:checked,
+    #preview-size-setting input[type="radio"]:checked {
       border-color: var(--accent);
       background: var(--accent);
     }
-    #interaction-setting input[type="radio"]:checked::after {
+    #interaction-setting input[type="radio"]:checked::after,
+    #preview-size-setting input[type="radio"]:checked::after {
       transform: translate(-50%, -50%) scale(1);
     }
     /* Modern style for Set key button */
@@ -132,6 +188,29 @@
         <div class="key-selector" id="key-selector">
           <button id="set-key-btn">Set key</button>
           <span id="key-display">No key selected</span>
+        </div>
+      </div>
+    </div>
+  </div>
+  <div class="separator"></div>
+  <div class="setting" id="preview-size-setting">
+    <label>Preview Size</label>
+    <div class="preview-size-options">
+      <div class="preview-size-unit-group">
+        <label><input type="radio" name="popup-size-unit" value="percent" id="popup-size-unit-percent"> %</label>
+        <label><input type="radio" name="popup-size-unit" value="px" id="popup-size-unit-px"> px</label>
+      </div>
+      <p class="helper-text" id="preview-size-helper">Allowed range: 10-90%</p>
+      <div class="preview-size-grid">
+        <div class="preview-size-field">
+          <label for="popup-width">Width</label>
+          <input type="number" id="popup-width" min="10" max="90" step="1">
+          <div class="field-error" id="popup-width-error" aria-live="polite"></div>
+        </div>
+        <div class="preview-size-field">
+          <label for="popup-height">Height</label>
+          <input type="number" id="popup-height" min="10" max="90" step="1">
+          <div class="field-error" id="popup-height-error" aria-live="polite"></div>
         </div>
       </div>
     </div>

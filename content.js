@@ -13,7 +13,19 @@ let listenersAttached = false;
 const DEBUG_PREVIEW = false;
 const ORIGINAL_LIVENESS_GRACE_MS = 1000;
 const POPUP_HARD_TIMEOUT_MS = 12000;
+const {
+  POPUP_MIN_WIDTH,
+  POPUP_MIN_HEIGHT,
+  DEFAULT_POPUP_SIZE_UNIT,
+  PREVIEW_SIZE_UNIT_DEFAULTS,
+  normalizePreviewSizeSettings
+} = globalThis.PreviewSizeConfig;
 let activePopupMouseInteractionCleanup = null;
+let popupSizeSettings = {
+  popupSizeUnit: DEFAULT_POPUP_SIZE_UNIT,
+  popupWidth: PREVIEW_SIZE_UNIT_DEFAULTS.percent.width,
+  popupHeight: PREVIEW_SIZE_UNIT_DEFAULTS.percent.height
+};
 
 function logPreviewDebug(event, details) {
   if (!DEBUG_PREVIEW) return;
@@ -42,6 +54,29 @@ function migrateSettingsIfNeeded(settings) {
   }
 }
 
+function getUpdatedPreviewSizeSettings(changes, currentSettings) {
+  return normalizePreviewSizeSettings({
+    popupSizeUnit: changes.popupSizeUnit ? changes.popupSizeUnit.newValue : currentSettings.popupSizeUnit,
+    popupWidth: changes.popupWidth ? changes.popupWidth.newValue : currentSettings.popupWidth,
+    popupHeight: changes.popupHeight ? changes.popupHeight.newValue : currentSettings.popupHeight
+  });
+}
+
+function getInitialPopupSize(settings) {
+  const normalizedSettings = normalizePreviewSizeSettings(settings || popupSizeSettings);
+  const width = normalizedSettings.popupSizeUnit === 'percent'
+    ? Math.round(window.innerWidth * (normalizedSettings.popupWidth / 100))
+    : normalizedSettings.popupWidth;
+  const height = normalizedSettings.popupSizeUnit === 'percent'
+    ? Math.round(window.innerHeight * (normalizedSettings.popupHeight / 100))
+    : normalizedSettings.popupHeight;
+
+  return {
+    width: Math.max(POPUP_MIN_WIDTH, width),
+    height: Math.max(POPUP_MIN_HEIGHT, height)
+  };
+}
+
 // Load initial settings
 chrome.storage.local.get(
   {
@@ -50,7 +85,10 @@ chrome.storage.local.get(
     hoverDelay: 2000,
     interactionType: 'hover',
     triggerKey: '',
-    interactionKey: ''
+    interactionKey: '',
+    popupSizeUnit: DEFAULT_POPUP_SIZE_UNIT,
+    popupWidth: PREVIEW_SIZE_UNIT_DEFAULTS.percent.width,
+    popupHeight: PREVIEW_SIZE_UNIT_DEFAULTS.percent.height
   },
   (data) => {
     enabled = data.enabled;
@@ -58,6 +96,7 @@ chrome.storage.local.get(
     hoverDelay = data.hoverDelay;
     interactionType = normalizeInteractionType(data.interactionType);
     triggerKey = normalizeTriggerKey(data);
+    popupSizeSettings = normalizePreviewSizeSettings(data);
     migrateSettingsIfNeeded(data);
 
     // Attach listeners if extension is enabled
@@ -431,6 +470,9 @@ chrome.storage.onChanged.addListener((changes, area) => {
   } else if (changes.interactionKey) {
     triggerKey = changes.interactionKey.newValue || '';
   }
+  if (changes.popupSizeUnit || changes.popupWidth || changes.popupHeight) {
+    popupSizeSettings = getUpdatedPreviewSizeSettings(changes, popupSizeSettings);
+  }
 });
 
 // z-index counter to manage popup stacking
@@ -496,10 +538,8 @@ const POPUP_CHROME_SHADOW_STYLES = `
     all: initial;
     position: fixed;
     z-index: 999999;
-    min-width: 256px;
-    min-height: 128px;
-    width: 33vw;
-    height: 33vh;
+    min-width: ${POPUP_MIN_WIDTH}px;
+    min-height: ${POPUP_MIN_HEIGHT}px;
     display: flex;
     flex-direction: column;
     background: #ffffff;
@@ -1104,11 +1144,14 @@ function createPopup(url, x, y, anchorRect) {
 
     let popup = document.createElement('div');
     const shadowRoot = popup.attachShadow({ mode: 'open' });
+    const initialSize = getInitialPopupSize(popupSizeSettings);
     // Assign initial stacking order
     popup.style.zIndex = ++zIndexCounter;
     popup.className = 'link-preview-popup';
     popup.style.left = '-10000px';
     popup.style.top = '-10000px';
+    popup.style.width = initialSize.width + 'px';
+    popup.style.height = initialSize.height + 'px';
     popup.style.opacity = '0';
     popup.style.transition = 'opacity 0.3s, transform 0.3s, border-color 0.2s ease, box-shadow 0.2s ease';
     shadowRoot.appendChild(createPopupShadowStyle());
@@ -1217,10 +1260,8 @@ function createPopup(url, x, y, anchorRect) {
                 let newWidth = startWidth + (event.clientX - startX);
                 let newHeight = startHeight + (event.clientY - startY);
                 // Enforce minimum dimensions
-                const MIN_WIDTH = 256;
-                const MIN_HEIGHT = 128;
-                if (newWidth < MIN_WIDTH) newWidth = MIN_WIDTH;
-                if (newHeight < MIN_HEIGHT) newHeight = MIN_HEIGHT;
+                if (newWidth < POPUP_MIN_WIDTH) newWidth = POPUP_MIN_WIDTH;
+                if (newHeight < POPUP_MIN_HEIGHT) newHeight = POPUP_MIN_HEIGHT;
                 popup.style.width = newWidth + 'px';
                 popup.style.height = newHeight + 'px';
             }
