@@ -20,7 +20,7 @@ const {
   PREVIEW_SIZE_UNIT_DEFAULTS,
   normalizePreviewSizeSettings
 } = globalThis.PreviewSizeConfig;
-let activePopupMouseInteractionCleanup = null;
+let activePopupPointerInteractionCleanup = null;
 let popupSizeSettings = {
   popupSizeUnit: DEFAULT_POPUP_SIZE_UNIT,
   popupWidth: PREVIEW_SIZE_UNIT_DEFAULTS.percent.width,
@@ -577,6 +577,7 @@ button {
     background: #eaf2ff;
     border-bottom: 1px solid #b3d1ff;
     user-select: none;
+    touch-action: none;
     cursor: move;
 }
 
@@ -718,6 +719,7 @@ button {
     height: 14px;
     border-radius: 4px;
     background: linear-gradient(135deg, rgba(79, 140, 255, 0.85), rgba(0, 224, 198, 0.85));
+    touch-action: none;
     cursor: se-resize;
 }
 
@@ -808,48 +810,52 @@ function applyPopupCoordinates(popupEntry, left, top) {
     popupEntry.y = top;
 }
 
-function startPopupMouseInteraction(popupEntry, options) {
+function startPopupPointerInteraction(popupEntry, pointerDownEvent, options) {
     if (!popupEntry || typeof options?.onMove !== 'function') {
         return () => {};
     }
 
-    if (typeof activePopupMouseInteractionCleanup === 'function') {
-        activePopupMouseInteractionCleanup();
+    const interactionTarget = options?.target;
+    if (!interactionTarget || typeof interactionTarget.setPointerCapture !== 'function') {
+        return () => {};
+    }
+
+    if (typeof activePopupPointerInteractionCleanup === 'function') {
+        activePopupPointerInteractionCleanup();
     }
 
     const {
         onMove,
-        onEnd,
-        disableIframePointerEvents = false
+        onEnd
     } = options;
-
+    const pointerId = pointerDownEvent.pointerId;
     const bodyStyle = document.body && document.body.style;
     const previousUserSelect = bodyStyle ? bodyStyle.userSelect : '';
-    const activeIframe = disableIframePointerEvents ? popupEntry.iframe : null;
-    const previousIframePointerEvents = activeIframe ? activeIframe.style.pointerEvents : '';
     let cleanedUp = false;
 
     function cleanup(event) {
         if (cleanedUp) return;
         cleanedUp = true;
 
-        document.removeEventListener('mousemove', onDocumentMouseMove);
-        window.removeEventListener('mouseup', onWindowMouseUp, true);
+        interactionTarget.removeEventListener('pointermove', onPointerMove);
+        interactionTarget.removeEventListener('pointerup', onPointerUp);
+        interactionTarget.removeEventListener('pointercancel', onPointerCancel);
+        interactionTarget.removeEventListener('lostpointercapture', onLostPointerCapture);
         window.removeEventListener('blur', onWindowBlur);
 
         if (bodyStyle) {
             bodyStyle.userSelect = previousUserSelect;
         }
 
-        if (activeIframe && popupEntry.iframe === activeIframe) {
-            activeIframe.style.pointerEvents = previousIframePointerEvents;
+        if (interactionTarget.isConnected && interactionTarget.hasPointerCapture(pointerId)) {
+            interactionTarget.releasePointerCapture(pointerId);
         }
 
-        if (popupEntry.activeMouseInteractionCleanup === cleanup) {
-            popupEntry.activeMouseInteractionCleanup = null;
+        if (popupEntry.activePointerInteractionCleanup === cleanup) {
+            popupEntry.activePointerInteractionCleanup = null;
         }
-        if (activePopupMouseInteractionCleanup === cleanup) {
-            activePopupMouseInteractionCleanup = null;
+        if (activePopupPointerInteractionCleanup === cleanup) {
+            activePopupPointerInteractionCleanup = null;
         }
 
         if (typeof onEnd === 'function') {
@@ -857,16 +863,23 @@ function startPopupMouseInteraction(popupEntry, options) {
         }
     }
 
-    function onDocumentMouseMove(event) {
-        if ((event.buttons & 1) !== 1) {
-            cleanup(event);
-            return;
-        }
-
+    function onPointerMove(event) {
+        if (event.pointerId !== pointerId) return;
         onMove(event, cleanup);
     }
 
-    function onWindowMouseUp(event) {
+    function onPointerUp(event) {
+        if (event.pointerId !== pointerId) return;
+        cleanup(event);
+    }
+
+    function onPointerCancel(event) {
+        if (event.pointerId !== pointerId) return;
+        cleanup(event);
+    }
+
+    function onLostPointerCapture(event) {
+        if (event.pointerId !== pointerId) return;
         cleanup(event);
     }
 
@@ -874,21 +887,19 @@ function startPopupMouseInteraction(popupEntry, options) {
         cleanup();
     }
 
-    popupEntry.activeMouseInteractionCleanup = cleanup;
-    activePopupMouseInteractionCleanup = cleanup;
+    popupEntry.activePointerInteractionCleanup = cleanup;
+    activePopupPointerInteractionCleanup = cleanup;
 
     if (bodyStyle) {
         bodyStyle.userSelect = 'none';
     }
 
-    if (activeIframe) {
-        // Keep the top-level document receiving drag events even when the cursor crosses the preview iframe.
-        activeIframe.style.pointerEvents = 'none';
-    }
-
-    document.addEventListener('mousemove', onDocumentMouseMove);
-    window.addEventListener('mouseup', onWindowMouseUp, true);
+    interactionTarget.addEventListener('pointermove', onPointerMove);
+    interactionTarget.addEventListener('pointerup', onPointerUp);
+    interactionTarget.addEventListener('pointercancel', onPointerCancel);
+    interactionTarget.addEventListener('lostpointercapture', onLostPointerCapture);
     window.addEventListener('blur', onWindowBlur);
+    interactionTarget.setPointerCapture(pointerId);
 
     return cleanup;
 }
@@ -1220,7 +1231,7 @@ function createPopup(url, x, y, anchorRect) {
         activeCandidateLoaded: false,
         activeCandidateFrameAlive: false,
         attentionTimer: null,
-        activeMouseInteractionCleanup: null,
+        activePointerInteractionCleanup: null,
         isClosing: false,
         x,
         y
@@ -1311,22 +1322,23 @@ function createPopup(url, x, y, anchorRect) {
         ensurePopupAccessibleTopBar(popupEntry);
     });
     // Bring this popup to front when clicking on its container (including top bar)
-    popup.addEventListener('mousedown', () => bringToFront(popupEntry.popupId));
+    popup.addEventListener('pointerdown', () => bringToFront(popupEntry.popupId));
     setTimeout(() => { popup.style.opacity = '1'; }, 10);
     loadPopupUrl(popupEntry, url);
 
     // Make popup draggable via the top bar
-    topBar.addEventListener('mousedown', function(e) {
+    topBar.addEventListener('pointerdown', function(e) {
         // Only initiate drag when clicking on the empty top bar area (not buttons)
         if (e.currentTarget !== e.target) return;
+        if (!e.isPrimary || e.button !== 0) return;
         e.preventDefault();
         const startX = e.clientX;
         const startY = e.clientY;
         const rect = popup.getBoundingClientRect();
         const startLeft = rect.left;
         const startTop = rect.top;
-        startPopupMouseInteraction(popupEntry, {
-            disableIframePointerEvents: true,
+        startPopupPointerInteraction(popupEntry, e, {
+            target: topBar,
             onMove(event) {
                 let newLeft = startLeft + (event.clientX - startX);
                 let newTop = startTop + (event.clientY - startY);
@@ -1345,15 +1357,16 @@ function createPopup(url, x, y, anchorRect) {
     let handle = document.createElement('div');
     handle.className = 'link-preview-resize-handle';
     bodyContainer.appendChild(handle);
-    handle.addEventListener('mousedown', function(e) {
+    handle.addEventListener('pointerdown', function(e) {
+        if (!e.isPrimary || e.button !== 0) return;
         e.preventDefault();
         e.stopPropagation();
         const startX = e.clientX;
         const startY = e.clientY;
         const startWidth = popup.offsetWidth;
         const startHeight = popup.offsetHeight;
-        startPopupMouseInteraction(popupEntry, {
-            disableIframePointerEvents: true,
+        startPopupPointerInteraction(popupEntry, e, {
+            target: handle,
             onMove(event) {
                 let newWidth = startWidth + (event.clientX - startX);
                 let newHeight = startHeight + (event.clientY - startY);
@@ -1373,8 +1386,8 @@ function closePopup(popupId) {
     if (!entry || !entry.popup || entry.isClosing) return;
     entry.isClosing = true;
     syncPopupCollectionActions();
-    if (typeof entry.activeMouseInteractionCleanup === 'function') {
-        entry.activeMouseInteractionCleanup();
+    if (typeof entry.activePointerInteractionCleanup === 'function') {
+        entry.activePointerInteractionCleanup();
     }
     if (entry.attentionTimer) {
         clearTimeout(entry.attentionTimer);

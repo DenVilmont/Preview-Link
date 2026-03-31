@@ -10,6 +10,27 @@ chrome.storage.onChanged.addListener((changes, area) => {
   }
 });
 if (window.self !== window.top) {
+  function containPreviewOverscroll(target) {
+    if (!target) return;
+    const styles = window.getComputedStyle(target);
+    if (styles.overscrollBehaviorX === 'auto') {
+      target.style.overscrollBehaviorX = 'contain';
+    }
+    if (styles.overscrollBehaviorY === 'auto') {
+      target.style.overscrollBehaviorY = 'contain';
+    }
+  }
+
+  function applyPreviewScrollContainment() {
+    containPreviewOverscroll(document.documentElement);
+    containPreviewOverscroll(document.body);
+  }
+
+  applyPreviewScrollContainment();
+  if (!document.body) {
+    window.addEventListener('DOMContentLoaded', applyPreviewScrollContainment, { once: true });
+  }
+
   function sendPopupUrlUpdate() {
     if (!iframeEnabled) return;
     window.parent.postMessage(
@@ -54,15 +75,8 @@ if (window.self !== window.top) {
     setTimeout(sendPostLoadBridgeSignals, 0);
   }
 
-  // Handle wheel events within iframe: allow native smooth scrolling and prevent propagation to host
-  document.addEventListener('wheel', e => {
-    if (!iframeEnabled) return;
-    // Stop propagation so scrolling only affects the iframe
-    e.stopPropagation();
-    // Do not call preventDefault to allow native smooth scrolling within the iframe
-  }, { passive: true });
   // Bring this popup to front when clicking inside its iframe
-  document.addEventListener('mousedown', () => {
+  document.addEventListener('pointerdown', () => {
     if (!iframeEnabled) return;
     window.parent.postMessage(
       {
