@@ -26,6 +26,31 @@ let popupSizeSettings = {
   popupWidth: PREVIEW_SIZE_UNIT_DEFAULTS.percent.width,
   popupHeight: PREVIEW_SIZE_UNIT_DEFAULTS.percent.height
 };
+const {
+  PREVIEW_MESSAGE_SOURCE,
+  FRAME_BRIDGE_MESSAGE_TYPE,
+  POPUP_RUNTIME_MESSAGE_TYPE,
+  PREVIEW_MESSAGE_VERSION,
+  POPUP_RUNTIME_ACTIONS,
+  parsePreviewPopupBindingFromWindowName,
+  buildPreviewPopupWindowName
+} = globalThis.PreviewRuntimeContract;
+const PREVIEW_REQUEST_DEDUPE_TTL_MS = 30000;
+const RETIRED_FRAME_SESSION_TTL_MS = 30000;
+let runtimeIdentityCounter = 0;
+
+function generateRuntimeId(prefix) {
+  runtimeIdentityCounter += 1;
+  return `${prefix}-${Date.now()}-${runtimeIdentityCounter}-${Math.random().toString(36).slice(2, 8)}`;
+}
+
+const runtimeContext = {
+  isTopWindow: window.self === window.top,
+  sourceContextId: generateRuntimeId('context'),
+  frameSessionId: generateRuntimeId('frame'),
+  previewPopupBinding: parsePreviewPopupBindingFromWindowName()
+};
+runtimeContext.isPreviewPopupRuntime = !!runtimeContext.previewPopupBinding;
 
 function logPreviewDebug(event, details) {
   if (!DEBUG_PREVIEW) return;
@@ -100,7 +125,7 @@ chrome.storage.local.get(
     migrateSettingsIfNeeded(data);
 
     // Attach listeners if extension is enabled
-    if (enabled) attachListeners();
+    if (enabled && !runtimeContext.isPreviewPopupRuntime) attachListeners();
   }
 );
 
@@ -108,14 +133,102 @@ const hoverInteraction = {
   activeLink: null,
   activeUrl: null,
   activeRect: null,
+  previewRequestId: null,
   timerId: null,
   timerPending: false,
   keyEligible: false
 };
-const sharedHoverCandidate = {
-  url: null,
-  rect: null
-};
+const sharedHoverCandidates = new Map();
+const handledPreviewRequests = new Map();
+const retiredFrameSessions = new Map();
+const popupSessionBindings = new Map();
+
+function getFrameSessionKey(sourceContextId, frameSessionId) {
+  return `${sourceContextId}::${frameSessionId}`;
+}
+
+function pruneHandledPreviewRequests() {
+  const now = Date.now();
+  handledPreviewRequests.forEach((entry, previewRequestId) => {
+    if (!entry || now - entry.timestamp > PREVIEW_REQUEST_DEDUPE_TTL_MS) {
+      handledPreviewRequests.delete(previewRequestId);
+    }
+  });
+}
+
+function pruneRetiredFrameSessions() {
+  const now = Date.now();
+  retiredFrameSessions.forEach((timestamp, sessionKey) => {
+    if (!timestamp || now - timestamp > RETIRED_FRAME_SESSION_TTL_MS) {
+      retiredFrameSessions.delete(sessionKey);
+    }
+  });
+}
+
+function isRetiredFrameSession(sourceContextId, frameSessionId) {
+  if (!sourceContextId || !frameSessionId) return false;
+  pruneRetiredFrameSessions();
+  return retiredFrameSessions.has(getFrameSessionKey(sourceContextId, frameSessionId));
+}
+
+function rememberHandledPreviewRequest(previewRequest) {
+  if (!previewRequest || typeof previewRequest.previewRequestId !== 'string') return false;
+  pruneHandledPreviewRequests();
+  if (handledPreviewRequests.has(previewRequest.previewRequestId)) {
+    return false;
+  }
+  handledPreviewRequests.set(previewRequest.previewRequestId, {
+    sourceContextId: previewRequest.sourceContextId,
+    frameSessionId: previewRequest.frameSessionId,
+    timestamp: Date.now()
+  });
+  return true;
+}
+
+function clearHandledPreviewRequestsForSource(sourceContextId, frameSessionId) {
+  if (!sourceContextId || !frameSessionId) return;
+  handledPreviewRequests.forEach((entry, previewRequestId) => {
+    if (!entry) return;
+    if (entry.sourceContextId === sourceContextId && entry.frameSessionId === frameSessionId) {
+      handledPreviewRequests.delete(previewRequestId);
+    }
+  });
+}
+
+function retireFrameSession(sourceContextId, frameSessionId) {
+  if (!sourceContextId || !frameSessionId) return;
+  retiredFrameSessions.set(getFrameSessionKey(sourceContextId, frameSessionId), Date.now());
+  clearSharedHoverCandidate(sourceContextId, frameSessionId);
+  clearHandledPreviewRequestsForSource(sourceContextId, frameSessionId);
+}
+
+function updateSharedHoverCandidate(previewRequest) {
+  if (!runtimeContext.isTopWindow || !previewRequest) return;
+  sharedHoverCandidates.set(previewRequest.sourceContextId, {
+    ...previewRequest,
+    updatedAt: Date.now()
+  });
+}
+
+function clearSharedHoverCandidate(sourceContextId, frameSessionId) {
+  if (!runtimeContext.isTopWindow || !sourceContextId) return;
+  const existingCandidate = sharedHoverCandidates.get(sourceContextId);
+  if (!existingCandidate) return;
+  if (frameSessionId && existingCandidate.frameSessionId !== frameSessionId) return;
+  sharedHoverCandidates.delete(sourceContextId);
+}
+
+function getMostRecentSharedHoverCandidate() {
+  if (!runtimeContext.isTopWindow) return null;
+  let activeCandidate = null;
+  sharedHoverCandidates.forEach((candidate) => {
+    if (!candidate || !isRectPayload(candidate.rect) || !candidate.requestedUrl) return;
+    if (!activeCandidate || candidate.updatedAt > activeCandidate.updatedAt) {
+      activeCandidate = candidate;
+    }
+  });
+  return activeCandidate;
+}
 
 function clearHoverTimer() {
   if (hoverInteraction.timerId) {
@@ -125,45 +238,75 @@ function clearHoverTimer() {
   hoverInteraction.timerPending = false;
 }
 
+function createFrameBridgeMessage(action, payload = {}) {
+  return {
+    source: PREVIEW_MESSAGE_SOURCE,
+    type: FRAME_BRIDGE_MESSAGE_TYPE,
+    version: PREVIEW_MESSAGE_VERSION,
+    action,
+    sourceContextId: runtimeContext.sourceContextId,
+    frameSessionId: runtimeContext.frameSessionId,
+    ...payload
+  };
+}
+
+function createLocalPreviewRequest(url, rectPayload, trigger) {
+  if (!url || !isRectPayload(rectPayload)) return null;
+  if (!hoverInteraction.previewRequestId) {
+    hoverInteraction.previewRequestId = generateRuntimeId('request');
+  }
+  return {
+    previewRequestId: hoverInteraction.previewRequestId,
+    sourceContextId: runtimeContext.sourceContextId,
+    frameSessionId: runtimeContext.frameSessionId,
+    requestedUrl: url,
+    trigger: trigger || null,
+    rect: rectPayload
+  };
+}
+
 function resetHoverInteraction() {
   clearHoverTimer();
   hoverInteraction.activeLink = null;
   hoverInteraction.activeUrl = null;
   hoverInteraction.activeRect = null;
+  hoverInteraction.previewRequestId = null;
   hoverInteraction.keyEligible = false;
 }
 
 function dispatchHoverClear() {
-  if (window.self === window.top) {
-    sharedHoverCandidate.url = null;
-    sharedHoverCandidate.rect = null;
+  if (runtimeContext.isPreviewPopupRuntime) return;
+  if (runtimeContext.isTopWindow) {
+    clearSharedHoverCandidate(runtimeContext.sourceContextId, runtimeContext.frameSessionId);
     return;
   }
   window.parent.postMessage(
-    {
-      source: 'link-preview-extension',
-      type: 'preview-coordinate-hop',
-      version: 1,
-      action: 'clearHover'
-    },
+    createFrameBridgeMessage('clearHover'),
+    '*'
+  );
+}
+
+function dispatchSourceContextTeardown() {
+  if (runtimeContext.isPreviewPopupRuntime) return;
+  if (runtimeContext.isTopWindow) {
+    retireFrameSession(runtimeContext.sourceContextId, runtimeContext.frameSessionId);
+    return;
+  }
+  window.parent.postMessage(
+    createFrameBridgeMessage('sourceContextTeardown'),
     '*'
   );
 }
 
 function dispatchKeyPreviewOpen() {
-  if (window.self === window.top) {
+  if (runtimeContext.isPreviewPopupRuntime) return;
+  if (runtimeContext.isTopWindow) {
     openKeyPreviewFromSharedHover();
     return;
   }
-  window.parent.postMessage(
-    {
-      source: 'link-preview-extension',
-      type: 'preview-coordinate-hop',
-      version: 1,
-      action: 'triggerKeyPreviewOpen'
-    },
-    '*'
-  );
+  const previewRequest = createLocalPreviewRequest(hoverInteraction.activeUrl, hoverInteraction.activeRect, 'key');
+  if (!previewRequest) return;
+  dispatchPreviewRequest('requestPreviewOpen', previewRequest);
 }
 
 function isEligibleAnchor(link) {
@@ -185,20 +328,24 @@ function onContentPointerOver(e) {
   hoverInteraction.activeLink = link;
   hoverInteraction.activeUrl = link.href;
   hoverInteraction.activeRect = localRect;
+  hoverInteraction.previewRequestId = generateRuntimeId('request');
   hoverInteraction.keyEligible = interactionType === 'hoverWithKey';
-  if (window.self === window.top) {
-    sharedHoverCandidate.url = link.href;
-    sharedHoverCandidate.rect = localRect;
-  } else {
-    dispatchPreviewRequest('updateHover', link.href, localRect, null);
+  const hoverPreviewRequest = createLocalPreviewRequest(link.href, localRect, null);
+  if (hoverPreviewRequest) {
+    dispatchPreviewRequest('updateHover', hoverPreviewRequest);
   }
 
   if (interactionType === 'hover') {
     const enteredLink = link;
     const enteredUrl = link.href;
+    const enteredPreviewRequestId = hoverInteraction.previewRequestId;
     hoverInteraction.timerPending = true;
     hoverInteraction.timerId = setTimeout(() => {
-      if (hoverInteraction.activeLink !== enteredLink || hoverInteraction.activeUrl !== enteredUrl) {
+      if (
+        hoverInteraction.activeLink !== enteredLink ||
+        hoverInteraction.activeUrl !== enteredUrl ||
+        hoverInteraction.previewRequestId !== enteredPreviewRequestId
+      ) {
         clearHoverTimer();
         return;
       }
@@ -243,48 +390,36 @@ function rectPayloadToAnchor(rectPayload) {
 
 function requestPreviewOpen(url, rectPayload, trigger) {
   if (!enabled || !url) return;
-  dispatchPreviewRequest('requestPreviewOpen', url, rectPayload, trigger || null);
+  const previewRequest = createLocalPreviewRequest(url, rectPayload, trigger || null);
+  if (!previewRequest) return;
+  dispatchPreviewRequest('requestPreviewOpen', previewRequest);
 }
 
 function openKeyPreviewFromSharedHover() {
   if (!enabled) return;
-  if (!sharedHoverCandidate.url || !isRectPayload(sharedHoverCandidate.rect)) return;
-  const { x, y } = rectPayloadToAnchor(sharedHoverCandidate.rect);
+  const hoverCandidate = getMostRecentSharedHoverCandidate();
+  if (!hoverCandidate) return;
   handlePreviewOpenRequest({
-    action: 'requestPreviewOpen',
-    url: sharedHoverCandidate.url,
-    x,
-    y,
-    rect: sharedHoverCandidate.rect,
+    ...hoverCandidate,
     trigger: 'key'
   });
 }
 
-function dispatchPreviewRequest(action, url, rectPayload, trigger) {
-  if (!isRectPayload(rectPayload)) return;
-  if (window.self === window.top) {
+function dispatchPreviewRequest(action, previewRequest) {
+  if (!previewRequest || !isRectPayload(previewRequest.rect)) return;
+  if (runtimeContext.isTopWindow) {
     if (action === 'updateHover') {
-      sharedHoverCandidate.url = url;
-      sharedHoverCandidate.rect = rectPayload;
+      updateSharedHoverCandidate(previewRequest);
       return;
     }
     if (action === 'requestPreviewOpen') {
-      const { x, y } = rectPayloadToAnchor(rectPayload);
-      handlePreviewOpenRequest({ action: 'requestPreviewOpen', url, x, y, rect: rectPayload, trigger });
+      handlePreviewOpenRequest(previewRequest);
       return;
     }
     return;
   }
   window.parent.postMessage(
-    {
-      source: 'link-preview-extension',
-      type: 'preview-coordinate-hop',
-      version: 1,
-      action,
-      url,
-      rect: rectPayload,
-      trigger: trigger || null
-    },
+    createFrameBridgeMessage(action, previewRequest),
     '*'
   );
 }
@@ -303,6 +438,21 @@ function isDirectChildWindow(sourceWindow) {
   return false;
 }
 
+function getDirectChildFrameElement(sourceWindow) {
+  if (!sourceWindow) return null;
+  const frameElements = document.querySelectorAll('iframe, frame');
+  for (const frameElement of frameElements) {
+    try {
+      if (frameElement.contentWindow === sourceWindow) {
+        return frameElement;
+      }
+    } catch (_) {
+      // Ignore inaccessible frame elements and keep scanning.
+    }
+  }
+  return null;
+}
+
 function addFrameOffsetToRect(rect, frameRect) {
   return {
     rectLeft: rect.rectLeft + frameRect.left,
@@ -314,74 +464,154 @@ function addFrameOffsetToRect(rect, frameRect) {
   };
 }
 
-function onCoordinateHopMessage(event) {
-  if (!enabled) return;
-  const data = event && event.data;
-  if (!data || typeof data !== 'object') return;
-  if (data.source !== 'link-preview-extension' || data.type !== 'preview-coordinate-hop' || data.version !== 1) return;
-  if (!isDirectChildWindow(event.source)) return;
-  if (data.action === 'triggerKeyPreviewOpen') {
-    if (window.self === window.top) {
-      openKeyPreviewFromSharedHover();
-      return;
-    }
-    window.parent.postMessage(data, '*');
-    return;
+function normalizeFrameBridgeMessage(data) {
+  if (!data || typeof data !== 'object') return null;
+  if (data.source !== PREVIEW_MESSAGE_SOURCE || data.type !== FRAME_BRIDGE_MESSAGE_TYPE || data.version !== PREVIEW_MESSAGE_VERSION) {
+    return null;
   }
-  if (data.action === 'clearHover') {
-    if (window.self === window.top) {
-      sharedHoverCandidate.url = null;
-      sharedHoverCandidate.rect = null;
-      return;
-    }
-    window.parent.postMessage(data, '*');
-    return;
-  }
-  if (!data.url || !isRectPayload(data.rect)) return;
-  if (data.action !== 'updateHover' && data.action !== 'requestPreviewOpen') return;
+  if (typeof data.action !== 'string') return null;
+  if (typeof data.sourceContextId !== 'string' || typeof data.frameSessionId !== 'string') return null;
 
-  let rect = data.rect;
-  if (window.self !== window.top && window.frameElement) {
-    const frameRect = window.frameElement.getBoundingClientRect();
-    rect = addFrameOffsetToRect(rect, frameRect);
+  if (data.action === 'clearHover' || data.action === 'sourceContextTeardown') {
+    return {
+      action: data.action,
+      sourceContextId: data.sourceContextId,
+      frameSessionId: data.frameSessionId
+    };
   }
 
-  if (window.self === window.top) {
-    if (data.action === 'updateHover') {
-      sharedHoverCandidate.url = data.url;
-      sharedHoverCandidate.rect = rect;
-      return;
-    }
-    if (data.action === 'requestPreviewOpen') {
-      const { x, y } = rectPayloadToAnchor(rect);
-      handlePreviewOpenRequest({
-        action: 'requestPreviewOpen',
-        url: data.url,
-        x,
-        y,
-        rect,
-        trigger: data.trigger || null
-      });
-    }
-    return;
-  }
+  if (data.action !== 'updateHover' && data.action !== 'requestPreviewOpen') return null;
+  const requestedUrl = typeof data.requestedUrl === 'string'
+    ? data.requestedUrl
+    : (typeof data.url === 'string' ? data.url : null);
+  if (!requestedUrl || !isRectPayload(data.rect) || typeof data.previewRequestId !== 'string') return null;
 
+  return {
+    action: data.action,
+    previewRequestId: data.previewRequestId,
+    sourceContextId: data.sourceContextId,
+    frameSessionId: data.frameSessionId,
+    requestedUrl,
+    trigger: typeof data.trigger === 'string' ? data.trigger : null,
+    rect: data.rect
+  };
+}
+
+function relayFrameBridgeMessage(message) {
+  if (runtimeContext.isTopWindow) return;
   window.parent.postMessage(
     {
-      source: 'link-preview-extension',
-      type: 'preview-coordinate-hop',
-      version: 1,
-      action: data.action,
-      url: data.url,
-      rect,
-      trigger: data.trigger || null
+      source: PREVIEW_MESSAGE_SOURCE,
+      type: FRAME_BRIDGE_MESSAGE_TYPE,
+      version: PREVIEW_MESSAGE_VERSION,
+      ...message
     },
     '*'
   );
 }
 
-function onContentKeyDown(e) {
+function routeFrameBridgeMessage(event, message) {
+  if (runtimeContext.isPreviewPopupRuntime || !isDirectChildWindow(event.source)) return;
+  if (isRetiredFrameSession(message.sourceContextId, message.frameSessionId)) return;
+
+  if (message.action === 'clearHover') {
+    if (runtimeContext.isTopWindow) {
+      clearSharedHoverCandidate(message.sourceContextId, message.frameSessionId);
+      return;
+    }
+    relayFrameBridgeMessage(message);
+    return;
+  }
+
+  if (message.action === 'sourceContextTeardown') {
+    if (runtimeContext.isTopWindow) {
+      retireFrameSession(message.sourceContextId, message.frameSessionId);
+      return;
+    }
+    relayFrameBridgeMessage(message);
+    return;
+  }
+
+  const sourceFrameElement = getDirectChildFrameElement(event.source);
+  if (!sourceFrameElement) return;
+  const rect = addFrameOffsetToRect(message.rect, sourceFrameElement.getBoundingClientRect());
+
+  const propagatedRequest = {
+    ...message,
+    rect
+  };
+  if (runtimeContext.isTopWindow) {
+    if (message.action === 'updateHover') {
+      updateSharedHoverCandidate(propagatedRequest);
+      return;
+    }
+    if (message.action === 'requestPreviewOpen') {
+      handlePreviewOpenRequest(propagatedRequest);
+    }
+    return;
+  }
+
+  relayFrameBridgeMessage(propagatedRequest);
+}
+
+function normalizePopupRuntimeMessage(data) {
+  if (!data || typeof data !== 'object') return null;
+  if (data.source !== PREVIEW_MESSAGE_SOURCE || data.type !== POPUP_RUNTIME_MESSAGE_TYPE || data.version !== PREVIEW_MESSAGE_VERSION) {
+    return null;
+  }
+  if (typeof data.action !== 'string' || typeof data.popupId !== 'string' || typeof data.popupSessionId !== 'string') {
+    return null;
+  }
+  if (
+    data.action !== POPUP_RUNTIME_ACTIONS.BRING_TO_FRONT &&
+    data.action !== POPUP_RUNTIME_ACTIONS.UPDATE_URL &&
+    data.action !== POPUP_RUNTIME_ACTIONS.FRAME_ALIVE
+  ) {
+    return null;
+  }
+  return {
+    action: data.action,
+    popupId: data.popupId,
+    popupSessionId: data.popupSessionId,
+    url: typeof data.url === 'string' ? data.url : null
+  };
+}
+
+function routePopupRuntimeMessage(message) {
+  if (!runtimeContext.isTopWindow) return;
+  const popupEntry = getPopupByRuntimeBinding(message.popupId, message.popupSessionId);
+  if (!popupEntry) return;
+
+  if (message.action === POPUP_RUNTIME_ACTIONS.BRING_TO_FRONT) {
+    bringToFront(popupEntry.popupId);
+    return;
+  }
+  if (message.action === POPUP_RUNTIME_ACTIONS.UPDATE_URL) {
+    syncPopupCurrentUrlForEntry(popupEntry, message.url || null);
+    return;
+  }
+  if (message.action === POPUP_RUNTIME_ACTIONS.FRAME_ALIVE) {
+    markPopupFrameAliveForEntry(popupEntry, message.url || null);
+  }
+}
+
+function onWindowMessage(event) {
   if (!enabled) return;
+  const data = event && event.data;
+  const frameBridgeMessage = normalizeFrameBridgeMessage(data);
+  if (frameBridgeMessage) {
+    routeFrameBridgeMessage(event, frameBridgeMessage);
+    return;
+  }
+  if (!runtimeContext.isTopWindow) return;
+  const popupRuntimeMessage = normalizePopupRuntimeMessage(data);
+  if (popupRuntimeMessage) {
+    routePopupRuntimeMessage(popupRuntimeMessage);
+  }
+}
+
+function onContentKeyDown(e) {
+  if (!enabled || runtimeContext.isPreviewPopupRuntime) return;
   if (interactionType === 'hover') return;
   if (interactionType === 'hoverWithKey') {
     if (triggerKey && e.code === triggerKey) {
@@ -396,26 +626,12 @@ function onContentKeyDown(e) {
   }
 }
 
-function onPopupRuntimeMessage(event) {
-  if (!enabled || window.self !== window.top) return;
-  const data = event && event.data;
-  if (!data || typeof data !== 'object') return;
-  if (data.source !== 'link-preview-extension' || data.type !== 'popup-runtime-bridge' || data.version !== 1) return;
-  const popupEntry = getPopupByIframeWindow(event.source);
-  if (!popupEntry) return;
-
-  if (data.action === 'bringToFront') {
-    bringToFront(popupEntry.popupId, data.url);
-    return;
-  }
-  if (data.action === 'updatePopupUrl') {
-    syncPopupCurrentUrlForEntry(popupEntry, data.url || null);
-    return;
-  }
-  if (data.action === 'previewFrameAlive') {
-    markPopupFrameAliveForEntry(popupEntry, data.url || null);
-    return;
-  }
+function onContextPageHide(event) {
+  if (runtimeContext.isPreviewPopupRuntime) return;
+  dispatchHoverClear();
+  resetHoverInteraction();
+  if (event && event.persisted) return;
+  dispatchSourceContextTeardown();
 }
 
 function attachListeners() {
@@ -423,8 +639,8 @@ function attachListeners() {
   document.addEventListener('pointerover', onContentPointerOver);
   document.addEventListener('pointerout', onContentPointerOut);
   document.addEventListener('keydown', onContentKeyDown);
-  window.addEventListener('message', onCoordinateHopMessage);
-  window.addEventListener('message', onPopupRuntimeMessage);
+  window.addEventListener('message', onWindowMessage);
+  window.addEventListener('pagehide', onContextPageHide);
   listenersAttached = true;
 }
 
@@ -433,8 +649,8 @@ function detachListeners() {
   document.removeEventListener('pointerover', onContentPointerOver);
   document.removeEventListener('pointerout', onContentPointerOut);
   document.removeEventListener('keydown', onContentKeyDown);
-  window.removeEventListener('message', onCoordinateHopMessage);
-  window.removeEventListener('message', onPopupRuntimeMessage);
+  window.removeEventListener('message', onWindowMessage);
+  window.removeEventListener('pagehide', onContextPageHide);
   dispatchHoverClear();
   resetHoverInteraction();
   listenersAttached = false;
@@ -446,12 +662,14 @@ chrome.storage.onChanged.addListener((changes, area) => {
 
   if (changes.enabled) {
     enabled = changes.enabled.newValue;
-    if (enabled) {
+    if (enabled && !runtimeContext.isPreviewPopupRuntime) {
       attachListeners();
     } else {
       detachListeners();
-      popups.slice().forEach((p) => closePopup(p.popupId));
-      popups = [];
+      if (runtimeContext.isTopWindow) {
+        popups.slice().forEach((p) => closePopup(p.popupId));
+        popups = [];
+      }
     }
   }
   if (changes.maxPopups) {
@@ -479,11 +697,29 @@ chrome.storage.onChanged.addListener((changes, area) => {
 let zIndexCounter = 1000;
 
 function handlePreviewOpenRequest(msg) {
-  if (!msg || !msg.url) return;
-  const x = typeof msg.x === 'number' ? msg.x : 0;
-  const y = typeof msg.y === 'number' ? msg.y : 0;
+  if (!runtimeContext.isTopWindow || runtimeContext.isPreviewPopupRuntime) return;
+  if (!msg || typeof msg.previewRequestId !== 'string' || typeof msg.sourceContextId !== 'string' || typeof msg.frameSessionId !== 'string') {
+    return;
+  }
+  if (isRetiredFrameSession(msg.sourceContextId, msg.frameSessionId)) return;
+  const requestedUrl = typeof msg.requestedUrl === 'string'
+    ? msg.requestedUrl
+    : (typeof msg.url === 'string' ? msg.url : null);
+  if (!requestedUrl) return;
   const anchorRect = isRectPayload(msg.rect) ? msg.rect : null;
-  createPopup(msg.url, x, y, anchorRect);
+  if (!rememberHandledPreviewRequest({
+    previewRequestId: msg.previewRequestId,
+    sourceContextId: msg.sourceContextId,
+    frameSessionId: msg.frameSessionId
+  })) {
+    return;
+  }
+  const anchorPoint = anchorRect ? rectPayloadToAnchor(anchorRect) : { x: 0, y: 0 };
+  createPopup(requestedUrl, anchorPoint.x, anchorPoint.y, anchorRect, {
+    previewRequestId: msg.previewRequestId,
+    sourceContextId: msg.sourceContextId,
+    trigger: typeof msg.trigger === 'string' ? msg.trigger : null
+  });
 }
 
 function showLimitReachedNotice() {
@@ -1191,7 +1427,24 @@ function closeAllPopups() {
     popups.slice().forEach((popupEntry) => closePopup(popupEntry.popupId));
 }
 
-function createPopup(url, x, y, anchorRect) {
+function getPopupExternalOpenUrl(popupEntry) {
+    if (!popupEntry) return null;
+    const candidateUrls = [
+        popupEntry.currentUrl,
+        popupEntry.currentPreviewUrl,
+        popupEntry.originalUrl,
+        popupEntry.requestedUrl
+    ];
+    for (const candidateUrl of candidateUrls) {
+        if (typeof candidateUrl === 'string' && candidateUrl.trim()) {
+            return candidateUrl;
+        }
+    }
+    return null;
+}
+
+function createPopup(url, x, y, anchorRect, options = {}) {
+    if (!runtimeContext.isTopWindow || runtimeContext.isPreviewPopupRuntime) return;
     const previewIdentityKey = getPreviewIdentityKey(url);
     const existingPopup = popups.find((p) => p.previewIdentityKey === previewIdentityKey);
     if (existingPopup) {
@@ -1212,11 +1465,17 @@ function createPopup(url, x, y, anchorRect) {
         previewIdentityKey,
         requestedUrl: url,
         currentUrl: url,
+        sourceContextId: options.sourceContextId || null,
+        lastPreviewRequestId: options.previewRequestId || null,
+        trigger: options.trigger || null,
+        anchorRect: anchorRect || null,
         currentPreviewUrl: url,
         previewCandidates: buildPreviewCandidates(url),
         activeCandidateIndex: 0,
         activeAttemptId: 0,
         state: 'loading',
+        popupSessionId: null,
+        iframeGeneration: 0,
         popup: null,
         shadowRoot: null,
         topBar: null,
@@ -1281,7 +1540,10 @@ function createPopup(url, x, y, anchorRect) {
 
     // New tab button
     let newTabBtn = createPopupControlButton('link-preview-control--newtab', POPUP_HEADER_LABELS.openInNewTab, 'newtab', () => {
-        window.open(popupEntry.originalUrl || popupEntry.requestedUrl, '_blank');
+        const externalOpenUrl = getPopupExternalOpenUrl(popupEntry);
+        if (externalOpenUrl) {
+            window.open(externalOpenUrl, '_blank');
+        }
         closePopup(popupEntry.popupId);
     });
     topBar.appendChild(newTabBtn);
@@ -1385,6 +1647,7 @@ function closePopup(popupId) {
     const entry = getPopupById(popupId);
     if (!entry || !entry.popup || entry.isClosing) return;
     entry.isClosing = true;
+    entry.state = 'closing';
     syncPopupCollectionActions();
     if (typeof entry.activePointerInteractionCleanup === 'function') {
         entry.activePointerInteractionCleanup();
@@ -1394,11 +1657,13 @@ function closePopup(popupId) {
         entry.attentionTimer = null;
     }
     clearPopupLoadLifecycle(entry);
+    clearPopupBodyContent(entry);
     entry.popup.style.pointerEvents = 'none';
     entry.popup.style.opacity = '0';
     setTimeout(() => {
         if (entry.popup) entry.popup.remove();
         popups = popups.filter(p => p.popupId !== popupId);
+        syncPopupCollectionActions();
     }, 300);
 }
 
@@ -1443,7 +1708,7 @@ function finishPopupLoadingState(popupEntry) {
 }
 
 function renderPopupFallback(popupEntry, message, state) {
-    const fallbackUrl = popupEntry.originalUrl || popupEntry.requestedUrl;
+    const fallbackUrl = getPopupExternalOpenUrl(popupEntry) || popupEntry.originalUrl || popupEntry.requestedUrl;
     const fallback = document.createElement('div');
     fallback.className = 'link-preview-fallback';
 
@@ -1495,6 +1760,7 @@ function renderPopupFallback(popupEntry, message, state) {
 
 function clearPopupBodyContent(popupEntry) {
     if (!popupEntry.bodyContainer) return;
+    clearPopupRuntimeBinding(popupEntry);
     if (popupEntry.iframe && popupEntry.iframe.parentNode === popupEntry.bodyContainer) {
         popupEntry.bodyContainer.removeChild(popupEntry.iframe);
     }
@@ -1614,8 +1880,11 @@ function mountPopupIframe(popupEntry, url) {
 
     const iframe = document.createElement('iframe');
     iframe.className = 'link-preview-iframe';
+    popupEntry.iframeGeneration += 1;
+    const popupSessionId = generateRuntimeId('popup-session');
+    iframe.name = buildPreviewPopupWindowName(popupEntry.popupId, popupSessionId);
     iframe.src = url;
-    popupEntry.iframe = iframe;
+    bindPopupRuntimeSession(popupEntry, iframe, popupSessionId);
     popupEntry.bodyContainer.appendChild(iframe);
 
     iframe.addEventListener('load', () => {
@@ -1686,7 +1955,7 @@ function bringToFront(popupId, urlFallback) {
     if (!entry && urlFallback) {
         entry = popups.find(p => p.currentUrl === urlFallback || p.requestedUrl === urlFallback);
     }
-    if (entry) {
+    if (entry && entry.popup && !entry.isClosing) {
         entry.popup.style.zIndex = ++zIndexCounter;
     }
 }
@@ -1708,8 +1977,28 @@ function getPopupById(popupId) {
     return popups.find(p => p.popupId === popupId);
 }
 
-function getPopupByIframeWindow(sourceWindow) {
-    return popups.find((popupEntry) => popupEntry.iframe && popupEntry.iframe.contentWindow === sourceWindow) || null;
+function bindPopupRuntimeSession(popupEntry, iframe, popupSessionId) {
+    clearPopupRuntimeBinding(popupEntry);
+    popupEntry.iframe = iframe;
+    popupEntry.popupSessionId = popupSessionId;
+    popupSessionBindings.set(popupSessionId, popupEntry.popupId);
+}
+
+function clearPopupRuntimeBinding(popupEntry) {
+    if (!popupEntry) return;
+    if (popupEntry.popupSessionId) {
+        popupSessionBindings.delete(popupEntry.popupSessionId);
+    }
+    popupEntry.popupSessionId = null;
+}
+
+function getPopupByRuntimeBinding(popupId, popupSessionId) {
+    if (!popupId || !popupSessionId) return null;
+    const boundPopupId = popupSessionBindings.get(popupSessionId);
+    if (!boundPopupId || boundPopupId !== popupId) return null;
+    const popupEntry = getPopupById(popupId);
+    if (!popupEntry || popupEntry.isClosing || popupEntry.popupSessionId !== popupSessionId) return null;
+    return popupEntry;
 }
 
 function reloadPopup(popupId) {

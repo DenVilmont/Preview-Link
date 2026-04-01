@@ -14,11 +14,7 @@
    },
    "content_scripts": [ {
       "all_frames": true,
-      "js": [ "preview-size-config.js", "content.js" ],
-      "matches": [ "\u003Call_urls>" ]
-   }, {
-      "all_frames": true,
-      "js": [ "iframe-handler.js" ],
+      "js": [ "preview-size-config.js", "preview-runtime-contract.js", "content.js", "iframe-handler.js" ],
       "matches": [ "\u003Call_urls>" ]
    } ],
    "description": "Without Tabs: preview any link's content instantly on hover—no extra tabs needed.",
@@ -33,5 +29,5 @@
    "manifest_version": 3,
    "name": "Preview Link",
    "permissions": [ "storage" ],
-   "version": "1.0.4"
+   "version": "1.0.4.1"
 }
