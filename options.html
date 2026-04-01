@@ -1,0 +1,440 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="UTF-8">
+  <title>Preview Link Settings</title>
+  <script src="preview-size-config.js" defer></script>
+  <script src="preview-settings.js" defer></script>
+  <script src="options.js" defer></script>
+  <style>
+    :root {
+      --accent: #4f8cff;
+      --accent-soft: #eef4ff;
+      --bg: #f6f8fc;
+      --panel: #ffffff;
+      --border: #d8e1f0;
+      --text: #1f2937;
+      --muted: #5f6c80;
+      --warning-bg: #fff5ea;
+      --warning-border: #f4b266;
+      --danger: #b63b23;
+    }
+
+    * {
+      box-sizing: border-box;
+    }
+
+    body {
+      margin: 0;
+      font-family: "Segoe UI", Arial, sans-serif;
+      background: var(--bg);
+      color: var(--text);
+    }
+
+    .page {
+      max-width: 980px;
+      margin: 0 auto;
+      padding: 32px 20px 48px;
+    }
+
+    .header {
+      margin-bottom: 20px;
+    }
+
+    .header h1 {
+      margin: 0 0 6px;
+      font-size: 28px;
+      font-weight: 600;
+    }
+
+    .header p {
+      margin: 0;
+      color: var(--muted);
+      font-size: 14px;
+    }
+
+    .status-toast {
+      position: fixed;
+      top: 20px;
+      left: 50%;
+      transform: translateX(-50%);
+      z-index: 20;
+      min-width: 260px;
+      max-width: min(440px, calc(100vw - 32px));
+      padding: 12px 16px;
+      border: 1px solid #bcd1f7;
+      background: #eef4ff;
+      color: #214b96;
+      border-radius: 14px;
+      box-shadow: 0 14px 32px rgba(42, 83, 144, 0.16);
+      font-size: 13px;
+      text-align: center;
+      pointer-events: none;
+    }
+
+    .tabs {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 10px;
+      margin-bottom: 18px;
+    }
+
+    .tab {
+      border: 1px solid var(--border);
+      background: #ffffff;
+      color: var(--text);
+      border-radius: 999px;
+      padding: 9px 14px;
+      font-size: 14px;
+      cursor: pointer;
+    }
+
+    .tab-active {
+      background: var(--accent-soft);
+      border-color: var(--accent);
+      color: var(--accent);
+      font-weight: 600;
+    }
+
+    .panel {
+      background: var(--panel);
+      border: 1px solid var(--border);
+      border-radius: 18px;
+      padding: 22px;
+      box-shadow: 0 14px 32px rgba(42, 83, 144, 0.08);
+    }
+
+    .panel h2 {
+      margin: 0 0 6px;
+      font-size: 20px;
+    }
+
+    .panel-intro {
+      margin: 0 0 18px;
+      color: var(--muted);
+      font-size: 14px;
+    }
+
+    .section-grid {
+      display: grid;
+      gap: 16px;
+    }
+
+    .setting {
+      border: 1px solid var(--border);
+      border-radius: 14px;
+      padding: 14px 16px;
+      background: #fcfdff;
+    }
+
+    .setting-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      gap: 16px;
+    }
+
+    .setting-title {
+      margin: 0 0 4px;
+      font-size: 15px;
+      font-weight: 600;
+    }
+
+    .setting-copy {
+      margin: 0;
+      color: var(--muted);
+      font-size: 13px;
+    }
+
+    .inline-options,
+    .stacked-options,
+    .inline-inputs {
+      display: flex;
+      gap: 12px;
+      align-items: center;
+      flex-wrap: wrap;
+      margin-top: 12px;
+    }
+
+    .stacked-options {
+      flex-direction: column;
+      align-items: flex-start;
+    }
+
+    .interaction-details {
+      display: grid;
+      gap: 14px;
+      margin-top: 14px;
+      padding-top: 14px;
+      border-top: 1px solid var(--border);
+    }
+
+    .interaction-detail-title {
+      margin: 0 0 4px;
+      font-size: 14px;
+      font-weight: 600;
+    }
+
+    .key-row {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 12px;
+      flex-wrap: wrap;
+    }
+
+    label.option,
+    label.toggle {
+      display: flex;
+      gap: 8px;
+      align-items: center;
+      font-size: 14px;
+    }
+
+    input[type="number"] {
+      width: 120px;
+      padding: 8px 10px;
+      border: 1px solid var(--border);
+      border-radius: 10px;
+      font-size: 14px;
+    }
+
+    .field-error {
+      min-height: 16px;
+      margin-top: 6px;
+      color: var(--danger);
+      font-size: 12px;
+    }
+
+    .helper {
+      margin: 8px 0 0;
+      color: var(--muted);
+      font-size: 12px;
+    }
+
+    .warning {
+      margin-top: 12px;
+      padding: 12px 14px;
+      border: 1px solid var(--warning-border);
+      background: var(--warning-bg);
+      color: #714318;
+      border-radius: 12px;
+      font-size: 13px;
+      line-height: 1.45;
+    }
+
+    button.action {
+      border: 1px solid var(--border);
+      background: #ffffff;
+      color: var(--text);
+      border-radius: 10px;
+      padding: 9px 14px;
+      font-size: 14px;
+      cursor: pointer;
+    }
+
+    button.danger {
+      border-color: #edc0b7;
+      color: var(--danger);
+      font-weight: 600;
+    }
+
+    @media (max-width: 720px) {
+      .page {
+        padding: 20px 14px 36px;
+      }
+
+      .panel {
+        padding: 18px;
+      }
+
+      .setting-header {
+        flex-direction: column;
+        align-items: flex-start;
+      }
+    }
+  </style>
+</head>
+<body>
+  <div class="page">
+    <header class="header">
+      <h1>Preview Link settings</h1>
+      <p>Changes save automatically.</p>
+    </header>
+
+    <p class="status-toast" id="settings-status" role="status" aria-live="polite" hidden></p>
+
+    <nav class="tabs" aria-label="Settings sections" role="tablist">
+      <button type="button" class="tab" id="tab-general" data-tab-target="general" role="tab" aria-controls="panel-general" aria-selected="true" tabindex="0">General</button>
+      <button type="button" class="tab" id="tab-preview-behavior" data-tab-target="preview-behavior" role="tab" aria-controls="panel-preview-behavior" aria-selected="false" tabindex="-1">Preview behavior</button>
+      <button type="button" class="tab" id="tab-features" data-tab-target="features" role="tab" aria-controls="panel-features" aria-selected="false" tabindex="-1">Features</button>
+      <button type="button" class="tab" id="tab-compatibility" data-tab-target="compatibility" role="tab" aria-controls="panel-compatibility" aria-selected="false" tabindex="-1">Compatibility</button>
+      <button type="button" class="tab" id="tab-appearance-language" data-tab-target="appearance-language" role="tab" aria-controls="panel-appearance-language" aria-selected="false" tabindex="-1">Appearance &amp; language</button>
+      <button type="button" class="tab" id="tab-actions" data-tab-target="actions" role="tab" aria-controls="panel-actions" aria-selected="false" tabindex="-1">Actions</button>
+    </nav>
+
+    <section class="panel" id="panel-general" data-tab-panel="general" role="tabpanel" aria-labelledby="tab-general" aria-hidden="false" tabindex="0">
+      <h2>General</h2>
+      <p class="panel-intro">Choose how previews open.</p>
+      <div class="section-grid">
+        <div class="setting">
+          <div class="setting-header">
+            <div>
+              <p class="setting-title">Enabled</p>
+              <p class="setting-copy">Turn Preview Link on or off.</p>
+            </div>
+            <label class="toggle">
+              <input type="checkbox" id="setting-enabled">
+              <span>Active</span>
+            </label>
+          </div>
+        </div>
+
+        <div class="setting">
+          <p class="setting-title">How previews open</p>
+          <p class="setting-copy">Choose whether previews open on hover or when you hold a key.</p>
+          <div class="stacked-options">
+            <label class="option">
+              <input type="radio" name="setting-interaction-type" id="setting-interaction-hover" value="hover">
+              <span>Hover only</span>
+            </label>
+            <label class="option">
+              <input type="radio" name="setting-interaction-type" id="setting-interaction-hover-with-key" value="hoverWithKey">
+              <span>Hover + key</span>
+            </label>
+          </div>
+
+          <div class="interaction-details">
+            <div id="setting-hover-delay-row">
+              <p class="interaction-detail-title">Hover delay</p>
+              <p class="setting-copy">Wait before opening a preview.</p>
+              <div class="inline-inputs">
+                <input type="number" id="setting-hover-delay" min="100" max="3000" step="100">
+                <span class="helper" id="hover-delay-range"></span>
+              </div>
+              <div class="field-error" id="setting-hover-delay-error" aria-live="polite"></div>
+            </div>
+
+            <div id="setting-trigger-key-row" hidden>
+              <p class="interaction-detail-title">Trigger key</p>
+              <p class="setting-copy">Choose the key you want to hold while hovering.</p>
+              <div class="key-row">
+                <button type="button" class="action" id="setting-trigger-key-btn">Set key</button>
+                <span class="helper" id="setting-trigger-key-display">No key set</span>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <section class="panel" id="panel-preview-behavior" data-tab-panel="preview-behavior" role="tabpanel" aria-labelledby="tab-preview-behavior" aria-hidden="true" tabindex="-1" hidden>
+      <h2>Preview behavior</h2>
+      <p class="panel-intro">Set the default size and how many previews can stay open.</p>
+      <div class="section-grid">
+        <div class="setting">
+          <p class="setting-title">Preview size defaults</p>
+          <p class="setting-copy">Switching units resets width and height to that unit's defaults.</p>
+          <div class="inline-options">
+            <label class="option">
+              <input type="radio" name="setting-popup-size-unit" id="setting-popup-size-unit-percent" value="percent">
+              <span>Percent</span>
+            </label>
+            <label class="option">
+              <input type="radio" name="setting-popup-size-unit" id="setting-popup-size-unit-px" value="px">
+              <span>Pixels</span>
+            </label>
+          </div>
+          <p class="helper" id="setting-popup-size-helper"></p>
+          <div class="inline-inputs">
+            <label class="option">Width <input type="number" id="setting-popup-width"></label>
+            <label class="option">Height <input type="number" id="setting-popup-height"></label>
+          </div>
+          <div class="field-error" id="setting-popup-width-error" aria-live="polite"></div>
+          <div class="field-error" id="setting-popup-height-error" aria-live="polite"></div>
+        </div>
+
+        <div class="setting">
+          <p class="setting-title">Maximum open previews</p>
+          <p class="setting-copy">New installs and reset use 5. Saved values stay as they are.</p>
+          <div class="inline-inputs">
+            <input type="number" id="setting-max-popups" min="1" step="1">
+            <span class="helper">Minimum <span id="max-popups-min"></span></span>
+          </div>
+          <div class="field-error" id="setting-max-popups-error" aria-live="polite"></div>
+        </div>
+      </div>
+    </section>
+
+    <section class="panel" id="panel-features" data-tab-panel="features" role="tabpanel" aria-labelledby="tab-features" aria-hidden="true" tabindex="-1" hidden>
+      <h2>Features</h2>
+      <p class="panel-intro">Optional preview features.</p>
+      <div class="section-grid">
+        <div class="setting">
+          <label class="toggle setting-header">
+            <span>
+              <span class="setting-title">Reader mode suggestions</span>
+              <span class="setting-copy">Suggest a cleaner reading view when it fits the page.</span>
+            </span>
+            <input type="checkbox" id="setting-reader-mode-suggestions">
+          </label>
+        </div>
+
+        <div class="setting">
+          <label class="toggle setting-header">
+            <span>
+              <span class="setting-title">Video mode</span>
+              <span class="setting-copy">Keep video-friendly preview behavior on.</span>
+            </span>
+            <input type="checkbox" id="setting-video-mode-enabled">
+          </label>
+        </div>
+      </div>
+    </section>
+
+    <section class="panel" id="panel-compatibility" data-tab-panel="compatibility" role="tabpanel" aria-labelledby="tab-compatibility" aria-hidden="true" tabindex="-1" hidden>
+      <h2>Compatibility</h2>
+      <p class="panel-intro">Only change this if a site is having trouble.</p>
+      <div class="section-grid">
+        <div class="setting">
+          <label class="toggle setting-header">
+            <span>
+              <span class="setting-title">Aggressive compatibility mode</span>
+              <span class="setting-copy">Use a stronger fallback for sites that do not behave well in preview.</span>
+            </span>
+            <input type="checkbox" id="setting-aggressive-compatibility-mode">
+          </label>
+          <div class="warning">
+            Warning: this mode may break sites and weakens some restrictions. Leave it off unless you are troubleshooting a specific compatibility problem.
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <section class="panel" id="panel-appearance-language" data-tab-panel="appearance-language" role="tabpanel" aria-labelledby="tab-appearance-language" aria-hidden="true" tabindex="-1" hidden>
+      <h2>Appearance &amp; language</h2>
+      <p class="panel-intro">Appearance and language options will show up here when they are ready.</p>
+      <div class="section-grid">
+        <div class="setting">
+          <p class="setting-title">More options later</p>
+          <p class="setting-copy">Nothing to change here yet.</p>
+        </div>
+      </div>
+    </section>
+
+    <section class="panel" id="panel-actions" data-tab-panel="actions" role="tabpanel" aria-labelledby="tab-actions" aria-hidden="true" tabindex="-1" hidden>
+      <h2>Actions</h2>
+      <p class="panel-intro">Reset all saved settings.</p>
+      <div class="section-grid">
+        <div class="setting">
+          <p class="setting-title">Reset to defaults</p>
+          <p class="setting-copy">Restore every setting to its default value.</p>
+          <div class="inline-inputs">
+            <button type="button" class="action danger" id="reset-settings-btn">Reset to defaults</button>
+          </div>
+        </div>
+      </div>
+    </section>
+  </div>
+</body>
+</html>

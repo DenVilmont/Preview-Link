@@ -1,14 +1,15 @@
 // content.js
 let popups = [];
-let MAX_POPUPS = 2;
+const { readSettings, isSettingsChange, DEFAULT_SETTINGS } = globalThis.PreviewSettings;
+let MAX_POPUPS = DEFAULT_SETTINGS.maxPopups;
 let popupIdCounter = 0;
 // Hover delay before opening popup (ms)
-let hoverDelay = 2000;
+let hoverDelay = DEFAULT_SETTINGS.hoverDelay;
 
 // Enabled/disabled and additional settings
-let enabled = true;
-let interactionType = 'hover';
-let triggerKey = '';
+let enabled = DEFAULT_SETTINGS.enabled;
+let interactionType = DEFAULT_SETTINGS.interactionType;
+let triggerKey = DEFAULT_SETTINGS.triggerKey;
 let listenersAttached = false;
 const DEBUG_PREVIEW = false;
 const ORIGINAL_LIVENESS_GRACE_MS = 1000;
@@ -57,34 +58,13 @@ function logPreviewDebug(event, details) {
   console.debug('[link-preview]', event, details);
 }
 
-function normalizeInteractionType(value) {
-  if (value === 'button') return 'hoverWithKey';
-  return value === 'hoverWithKey' ? 'hoverWithKey' : 'hover';
-}
-
-function normalizeTriggerKey(settings) {
-  return settings.triggerKey || settings.interactionKey || '';
-}
-
-function migrateSettingsIfNeeded(settings) {
-  const updates = {};
-  if (settings.interactionType === 'button') {
-    updates.interactionType = 'hoverWithKey';
-  }
-  if (settings.interactionKey && !settings.triggerKey) {
-    updates.triggerKey = settings.interactionKey;
-  }
-  if (Object.keys(updates).length > 0) {
-    chrome.storage.local.set(updates);
-  }
-}
-
-function getUpdatedPreviewSizeSettings(changes, currentSettings) {
-  return normalizePreviewSizeSettings({
-    popupSizeUnit: changes.popupSizeUnit ? changes.popupSizeUnit.newValue : currentSettings.popupSizeUnit,
-    popupWidth: changes.popupWidth ? changes.popupWidth.newValue : currentSettings.popupWidth,
-    popupHeight: changes.popupHeight ? changes.popupHeight.newValue : currentSettings.popupHeight
-  });
+function applyStoredSettings(settings) {
+  enabled = settings.enabled;
+  MAX_POPUPS = settings.maxPopups;
+  hoverDelay = settings.hoverDelay;
+  interactionType = settings.interactionType;
+  triggerKey = settings.triggerKey;
+  popupSizeSettings = normalizePreviewSizeSettings(settings);
 }
 
 function getInitialPopupSize(settings) {
@@ -103,31 +83,12 @@ function getInitialPopupSize(settings) {
 }
 
 // Load initial settings
-chrome.storage.local.get(
-  {
-    enabled: true,
-    maxPopups: 2,
-    hoverDelay: 2000,
-    interactionType: 'hover',
-    triggerKey: '',
-    interactionKey: '',
-    popupSizeUnit: DEFAULT_POPUP_SIZE_UNIT,
-    popupWidth: PREVIEW_SIZE_UNIT_DEFAULTS.percent.width,
-    popupHeight: PREVIEW_SIZE_UNIT_DEFAULTS.percent.height
-  },
-  (data) => {
-    enabled = data.enabled;
-    MAX_POPUPS = data.maxPopups;
-    hoverDelay = data.hoverDelay;
-    interactionType = normalizeInteractionType(data.interactionType);
-    triggerKey = normalizeTriggerKey(data);
-    popupSizeSettings = normalizePreviewSizeSettings(data);
-    migrateSettingsIfNeeded(data);
+readSettings().then((settings) => {
+  applyStoredSettings(settings);
 
-    // Attach listeners if extension is enabled
-    if (enabled && !runtimeContext.isPreviewPopupRuntime) attachListeners();
-  }
-);
+  // Attach listeners if extension is enabled
+  if (enabled && !runtimeContext.isPreviewPopupRuntime) attachListeners();
+});
 
 const hoverInteraction = {
   activeLink: null,
@@ -658,39 +619,30 @@ function detachListeners() {
 
 // Update settings on change
 chrome.storage.onChanged.addListener((changes, area) => {
-  if (area !== 'local') return;
+  if (area !== 'local' || !isSettingsChange(changes)) return;
 
-  if (changes.enabled) {
-    enabled = changes.enabled.newValue;
+  readSettings().then((settings) => {
+    const wasEnabled = enabled;
+    const previousInteractionType = interactionType;
+
+    applyStoredSettings(settings);
+
+    if (previousInteractionType !== interactionType) {
+      dispatchHoverClear();
+      resetHoverInteraction();
+    }
+
     if (enabled && !runtimeContext.isPreviewPopupRuntime) {
       attachListeners();
-    } else {
-      detachListeners();
-      if (runtimeContext.isTopWindow) {
-        popups.slice().forEach((p) => closePopup(p.popupId));
-        popups = [];
-      }
+      return;
     }
-  }
-  if (changes.maxPopups) {
-    MAX_POPUPS = changes.maxPopups.newValue;
-  }
-  if (changes.hoverDelay) {
-    hoverDelay = changes.hoverDelay.newValue;
-  }
-  if (changes.interactionType) {
-    dispatchHoverClear();
-    interactionType = normalizeInteractionType(changes.interactionType.newValue);
-    resetHoverInteraction();
-  }
-  if (changes.triggerKey) {
-    triggerKey = changes.triggerKey.newValue || '';
-  } else if (changes.interactionKey) {
-    triggerKey = changes.interactionKey.newValue || '';
-  }
-  if (changes.popupSizeUnit || changes.popupWidth || changes.popupHeight) {
-    popupSizeSettings = getUpdatedPreviewSizeSettings(changes, popupSizeSettings);
-  }
+
+    detachListeners();
+    if (wasEnabled && !enabled && runtimeContext.isTopWindow) {
+      popups.slice().forEach((p) => closePopup(p.popupId));
+      popups = [];
+    }
+  });
 });
 
 // z-index counter to manage popup stacking

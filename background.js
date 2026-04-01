@@ -1,5 +1,7 @@
 // Background service worker responsibilities are intentionally browser-level only:
 // - keep extension action icon in sync with enabled state.
+importScripts('preview-size-config.js', 'preview-settings.js');
+
 const ICON_ON = {
   '16': 'icons/icon-on.png',
   '32': 'icons/icon-on.png',
@@ -14,7 +16,7 @@ const ICON_OFF = {
 };
 // Refresh icon based on state
 function refreshIcon() {
-  chrome.storage.local.get({ enabled: true }, ({ enabled }) => {
+  globalThis.PreviewSettings.readSettings().then(({ enabled }) => {
     chrome.action.setIcon({ path: enabled ? ICON_ON : ICON_OFF });
   });
 }
@@ -22,6 +24,11 @@ function refreshIcon() {
 refreshIcon();
 // On browser startup
 chrome.runtime.onStartup.addListener(refreshIcon);
+chrome.runtime.onInstalled.addListener((details) => {
+  if (details.reason === 'install' || details.reason === 'update') {
+    globalThis.PreviewSettings.initializeSettingsForLifecycle(details.reason).then(refreshIcon);
+  }
+});
 // On storage change
 chrome.storage.onChanged.addListener((changes, area) => {
   if (area === 'local' && changes.enabled) {

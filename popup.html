@@ -4,217 +4,255 @@
   <meta charset="UTF-8">
   <title>Preview Link</title>
   <script src="preview-size-config.js" defer></script>
+  <script src="preview-settings.js" defer></script>
   <script src="popup.js" defer></script>
   <style>
-    :root { --accent: #4f8cff; --bg: #fcfcfc; --text: #333333; --light: #f0f4ff; }
-    body { margin:0; padding:16px; font-family: Arial, sans-serif; background: var(--bg); color: var(--text); width: 280px;
-      border-radius: 8px;
-      box-shadow: 0 4px 16px rgba(0,0,0,0.1);
-      transition: box-shadow 0.2s ease;
+    :root {
+      --accent: #4f8cff;
+      --border: #d9e3f6;
+      --bg: #fbfcff;
+      --panel: #ffffff;
+      --text: #1f2937;
+      --muted: #5f6c80;
     }
-    h3 { margin:0 0 16px; font-size: 18px; font-weight: normal; border-bottom: 1px solid #e0e0e0; padding-bottom: 8px; }
-    .setting { display:flex; align-items:center; justify-content:space-between; margin-bottom: 16px; }
-    .setting label { font-size: 14px; color: #555555; }
-    input[type="number"] { width: 60px; padding: 4px 8px; border: 1px solid #ccc; border-radius: 4px; font-size: 14px; }
-    .switch { position: relative; display: inline-block; width: 40px; height: 20px; }
-    .switch input { opacity: 0; width: 0; height: 0; }
-    .switch .slider { position: absolute; cursor: pointer; top: 0; left: 0; right: 0; bottom: 0; background: #ccc; transition: 0.4s; border-radius: 20px; }
-    .switch .slider:before { position: absolute; content: ""; height: 16px; width: 16px; left: 2px; bottom: 2px; background: white; transition: 0.4s; border-radius: 50%; }
-    .switch input:checked + .slider { background: var(--accent); }
-    .switch input:checked + .slider:before { transform: translateX(20px); }
-    .range-container { display:flex; align-items:center; }
-    input[type="range"] { flex: 1; margin: 0 8px; }
-    .range-value { width: 40px; text-align: right; font-size: 14px; color: #555555; }
-    .setting select {
-      padding: 4px 8px;
-      border: 1px solid #ccc;
-      border-radius: 4px;
-      background: #fff;
-      font-size: 14px;
+
+    body {
+      margin: 0;
+      padding: 14px;
+      width: 260px;
+      font-family: "Segoe UI", Arial, sans-serif;
+      background: var(--bg);
+      color: var(--text);
     }
-    .interaction-options { display: flex; flex-direction: column; gap: 12px; margin-top: 8px; }
-    .option-block { display: flex; flex-direction: column; }
-    .key-selector { margin-top: 4px; display: none; align-items: center; margin-left: 20px; }
-    #delay-container { margin-top: 4px; display: none; margin-left: 20px; }
-    .separator { height: 1px; border: none; background: linear-gradient(to right, transparent, #ccc, transparent); margin: 12px 0; }
-    #interaction-setting {
-      display: flex;
-      flex-direction: column;
-      align-items: flex-start;
+
+    .card {
+      background: var(--panel);
+      border: 1px solid var(--border);
+      border-radius: 14px;
+      padding: 14px;
+      box-shadow: 0 10px 30px rgba(79, 140, 255, 0.08);
     }
-    #interaction-setting > label {
-      margin-bottom: 8px;
+
+    h1 {
+      margin: 0 0 4px;
+      font-size: 16px;
+      font-weight: 600;
     }
-    #preview-size-setting {
-      display: flex;
-      flex-direction: column;
-      align-items: stretch;
-      gap: 8px;
+
+    .subtitle {
+      margin: 0 0 14px;
+      color: var(--muted);
+      font-size: 12px;
     }
-    #preview-size-setting > label {
+
+    .section {
+      border: 1px solid var(--border);
+      border-radius: 12px;
+      padding: 12px;
+      background: #fcfdff;
+      margin-bottom: 12px;
+    }
+
+    .section:last-of-type {
       margin-bottom: 0;
     }
-    .preview-size-options {
-      display: flex;
-      flex-direction: column;
-      gap: 10px;
-      box-sizing: border-box;
-      padding: 0 8px 0 4px;
+
+    .section-title {
+      margin: 0 0 4px;
+      font-size: 13px;
+      font-weight: 600;
     }
-    .preview-size-unit-group {
+
+    .section-copy {
+      margin: 0 0 10px;
+      color: var(--muted);
+      font-size: 12px;
+    }
+
+    .row,
+    .mode-row {
       display: flex;
+      align-items: center;
+      justify-content: space-between;
       gap: 12px;
-      flex-wrap: wrap;
+      margin-bottom: 12px;
     }
-    .preview-size-grid {
+
+    .mode-group {
       display: grid;
-      grid-template-columns: repeat(2, minmax(0, 1fr));
-      column-gap: 16px;
-      row-gap: 12px;
-      box-sizing: border-box;
+      gap: 8px;
+      margin-bottom: 12px;
     }
-    .preview-size-field {
+
+    .mode-option {
       display: flex;
-      flex-direction: column;
-      gap: 4px;
+      align-items: center;
+      gap: 8px;
+      font-size: 13px;
+    }
+
+    .interaction-details {
+      display: grid;
+      gap: 10px;
+    }
+
+    .detail {
+      border-top: 1px solid var(--border);
+      padding-top: 10px;
+    }
+
+    .detail-label {
+      display: block;
+      margin-bottom: 8px;
+      font-size: 12px;
+      font-weight: 600;
+      color: var(--muted);
+    }
+
+    .inline-control {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+
+    .key-control {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 12px;
+    }
+
+    .key-value {
       min-width: 0;
+      flex: 1;
+      text-align: right;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
     }
-    .preview-size-field input[type="number"] {
-      width: 100%;
-      box-sizing: border-box;
-    }
-    .helper-text {
-      margin: 0;
-      font-size: 12px;
-      color: #666666;
-    }
-    .field-error {
-      min-height: 14px;
-      font-size: 12px;
-      color: #c62828;
-    }
-    .input-invalid {
-      border-color: #c62828 !important;
-    }
-    /* Modern style for radio buttons */
-    #interaction-setting input[type="radio"],
-    #preview-size-setting input[type="radio"] {
-      -webkit-appearance: none;
-      appearance: none;
-      width: 16px;
-      height: 16px;
-      border: 2px solid var(--accent);
-      border-radius: 50%;
-      margin-right: 8px;
+
+    .switch {
       position: relative;
-      cursor: pointer;
-      transition: background 0.2s, border-color 0.2s;
+      display: inline-block;
+      width: 42px;
+      height: 22px;
     }
-    #interaction-setting input[type="radio"]::after,
-    #preview-size-setting input[type="radio"]::after {
-      content: '';
+
+    .switch input {
+      opacity: 0;
+      width: 0;
+      height: 0;
+    }
+
+    .slider {
       position: absolute;
-      top: 50%;
-      left: 50%;
-      width: 8px;
-      height: 8px;
-      background: var(--accent);
+      inset: 0;
+      border-radius: 999px;
+      background: #c9d3e8;
+      transition: background 0.2s ease;
+    }
+
+    .slider::before {
+      content: "";
+      position: absolute;
+      width: 18px;
+      height: 18px;
+      left: 2px;
+      top: 2px;
       border-radius: 50%;
-      transform: translate(-50%, -50%) scale(0);
-      transition: transform 0.2s;
+      background: #ffffff;
+      transition: transform 0.2s ease;
+      box-shadow: 0 1px 3px rgba(0, 0, 0, 0.18);
     }
-    #interaction-setting input[type="radio"]:checked,
-    #preview-size-setting input[type="radio"]:checked {
-      border-color: var(--accent);
+
+    .switch input:checked + .slider {
       background: var(--accent);
     }
-    #interaction-setting input[type="radio"]:checked::after,
-    #preview-size-setting input[type="radio"]:checked::after {
-      transform: translate(-50%, -50%) scale(1);
+
+    .switch input:checked + .slider::before {
+      transform: translateX(20px);
     }
-    /* Modern style for Set key button */
-    #set-key-btn {
-      padding: 6px 12px;
-      background: var(--accent);
-      color: white;
-      border: none;
-      border-radius: 4px;
-      font-size: 14px;
+
+    input[type="range"] {
+      flex: 1;
+      accent-color: var(--accent);
+    }
+
+    button {
+      border: 1px solid var(--border);
+      border-radius: 10px;
+      background: #ffffff;
+      color: var(--text);
+      padding: 8px 10px;
+      font-size: 13px;
       cursor: pointer;
-      transition: background 0.2s;
     }
-    #set-key-btn:hover {
-      background: #3e7bd1;
+
+    button.primary {
+      width: 100%;
+      margin-top: 8px;
+      background: var(--accent);
+      border-color: var(--accent);
+      color: #ffffff;
+      font-weight: 600;
     }
-    #set-key-btn:focus {
-      outline: 2px solid #fff;
-      outline-offset: 2px;
-    }
-    /* Spacing and uppercase style for the key label */
-    #key-display {
-      margin-left: 8px;
-      text-transform: uppercase;
-      font-weight: bold;
+
+    .muted {
+      color: var(--muted);
+      font-size: 12px;
     }
   </style>
 </head>
 <body>
-  <h3>Preview Link</h3>
-  <div class="setting">
-    <label for="toggle-enabled">Enable</label>
-    <label class="switch">
-      <input type="checkbox" id="toggle-enabled">
-      <span class="slider"></span>
-    </label>
-  </div>
-  <div class="setting">
-    <label for="max-popups">Max popups</label>
-    <input type="number" id="max-popups" min="1">
-  </div>
-  <div class="separator"></div>
-  <div class="setting" id="interaction-setting">
-    <label>Open trigger</label>
-    <div class="interaction-options">
-      <div class="option-block">
-        <label><input type="radio" name="interaction-type" value="hover" id="interaction-hover"> Hover only</label>
-        <div class="range-container" id="delay-container">
-          <label for="hover-delay">Delay (ms)</label>
-          <input type="range" id="hover-delay" min="100" max="3000" step="100">
-          <span class="range-value" id="hover-delay-label">2000</span>
-        </div>
+  <div class="card">
+    <h1>Preview Link</h1>
+    <p class="subtitle">Quick settings</p>
+
+    <div class="section">
+      <div class="row">
+        <span>Enabled</span>
+        <label class="switch">
+          <input type="checkbox" id="toggle-enabled">
+          <span class="slider"></span>
+        </label>
       </div>
-      <div class="option-block">
-        <label><input type="radio" name="interaction-type" value="hoverWithKey" id="interaction-hover-with-key"> Hover + key</label>
-        <div class="key-selector" id="key-selector">
-          <button id="set-key-btn">Set key</button>
-          <span id="key-display">No key selected</span>
+    </div>
+
+    <div class="section">
+      <p class="section-title">How previews open</p>
+      <p class="section-copy">Choose whether previews open on hover or when you hold a key.</p>
+
+      <div class="mode-group" aria-label="Interaction mode">
+        <label class="mode-option">
+          <input type="radio" name="interaction-type" value="hover" id="interaction-hover">
+          <span>Hover only</span>
+        </label>
+        <label class="mode-option">
+          <input type="radio" name="interaction-type" value="hoverWithKey" id="interaction-hover-with-key">
+          <span>Hover + key</span>
+        </label>
+      </div>
+
+      <div class="interaction-details">
+        <div class="detail" id="delay-row">
+          <span class="detail-label">Hover delay</span>
+          <div class="inline-control">
+            <input type="range" id="hover-delay" min="100" max="3000" step="100">
+            <span class="muted" id="hover-delay-label">2000 ms</span>
+          </div>
+        </div>
+
+        <div class="detail" id="key-row" hidden>
+          <span class="detail-label">Trigger key</span>
+          <div class="key-control">
+            <button type="button" id="set-key-btn">Set key</button>
+            <span class="muted key-value" id="key-display">No key set</span>
+          </div>
         </div>
       </div>
     </div>
+
+    <button type="button" class="primary" id="open-settings-btn">Open settings</button>
   </div>
-  <div class="separator"></div>
-  <div class="setting" id="preview-size-setting">
-    <label>Preview Size</label>
-    <div class="preview-size-options">
-      <div class="preview-size-unit-group">
-        <label><input type="radio" name="popup-size-unit" value="percent" id="popup-size-unit-percent"> %</label>
-        <label><input type="radio" name="popup-size-unit" value="px" id="popup-size-unit-px"> px</label>
-      </div>
-      <p class="helper-text" id="preview-size-helper">Allowed range: 10-90%</p>
-      <div class="preview-size-grid">
-        <div class="preview-size-field">
-          <label for="popup-width">Width</label>
-          <input type="number" id="popup-width" min="10" max="90" step="1">
-          <div class="field-error" id="popup-width-error" aria-live="polite"></div>
-        </div>
-        <div class="preview-size-field">
-          <label for="popup-height">Height</label>
-          <input type="number" id="popup-height" min="10" max="90" step="1">
-          <div class="field-error" id="popup-height-error" aria-live="polite"></div>
-        </div>
-      </div>
-    </div>
-  </div>
-  <div class="separator"></div>
 </body>
-</html> 
+</html>
