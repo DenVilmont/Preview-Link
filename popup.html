@@ -2,7 +2,7 @@
 <html>
 <head>
   <meta charset="UTF-8">
-  <title>Preview Link</title>
+  <title data-i18n="popup_documentTitle"></title>
   <script
     src="preview-theme.js"
     data-apply-document-tokens="true"
@@ -10,6 +10,7 @@
     data-bootstrap-document-theme="true"></script>
   <script src="preview-size-config.js" defer></script>
   <script src="preview-settings.js" defer></script>
+  <script src="preview-i18n.js" defer></script>
   <script src="popup.js" defer></script>
   <style>
     body {
@@ -61,8 +62,7 @@
       font-size: 12px;
     }
 
-    .row,
-    .mode-row {
+    .row {
       display: flex;
       align-items: center;
       justify-content: space-between;
@@ -193,12 +193,12 @@
 </head>
 <body>
   <div class="card">
-    <h1>Preview Link</h1>
-    <p class="subtitle">Quick settings</p>
+    <h1 data-i18n="common_appName"></h1>
+    <p class="subtitle" data-i18n="popup_subtitle"></p>
 
     <div class="section">
       <div class="row">
-        <span>Enabled</span>
+        <span data-i18n="common_enabled"></span>
         <label class="switch">
           <input type="checkbox" id="toggle-enabled">
           <span class="slider"></span>
@@ -207,40 +207,40 @@
     </div>
 
     <div class="section">
-      <p class="section-title">How previews open</p>
-      <p class="section-copy">Choose whether previews open on hover or when you hold a key.</p>
+      <p class="section-title" data-i18n="popup_interaction_title"></p>
+      <p class="section-copy" data-i18n="popup_interaction_description"></p>
 
-      <div class="mode-group" aria-label="Interaction mode">
+      <div class="mode-group" data-i18n-aria-label="a11y_interactionMode">
         <label class="mode-option">
           <input type="radio" name="interaction-type" value="hover" id="interaction-hover">
-          <span>Hover only</span>
+          <span data-i18n="interaction_hover"></span>
         </label>
         <label class="mode-option">
           <input type="radio" name="interaction-type" value="hoverWithKey" id="interaction-hover-with-key">
-          <span>Hover + key</span>
+          <span data-i18n="interaction_hoverWithKey"></span>
         </label>
       </div>
 
       <div class="interaction-details">
         <div class="detail" id="delay-row">
-          <span class="detail-label">Hover delay</span>
+          <span class="detail-label" data-i18n="settings_hoverDelay_title"></span>
           <div class="inline-control">
             <input type="range" id="hover-delay" min="100" max="3000" step="100">
-            <span class="muted" id="hover-delay-label">2000 ms</span>
+            <span class="muted" id="hover-delay-label"></span>
           </div>
         </div>
 
         <div class="detail" id="key-row" hidden>
-          <span class="detail-label">Trigger key</span>
+          <span class="detail-label" data-i18n="settings_triggerKey_title"></span>
           <div class="key-control">
-            <button type="button" id="set-key-btn">Set key</button>
-            <span class="muted key-value" id="key-display">No key set</span>
+            <button type="button" id="set-key-btn"></button>
+            <span class="muted key-value" id="key-display"></span>
           </div>
         </div>
       </div>
     </div>
 
-    <button type="button" class="primary" id="open-settings-btn">Open settings</button>
+    <button type="button" class="primary" id="open-settings-btn" data-i18n="popup_openSettings"></button>
   </div>
 </body>
 </html>

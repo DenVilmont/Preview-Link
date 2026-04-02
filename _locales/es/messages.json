@@ -1,0 +1,356 @@
+{
+  "manifest_name": {
+    "message": "Preview Link"
+  },
+  "manifest_description": {
+    "message": "Sin pestañas: previsualiza al instante el contenido de cualquier enlace al pasar el cursor, sin abrir pestañas extra."
+  },
+  "manifest_actionTitle": {
+    "message": "Preview Link"
+  },
+  "common_appName": {
+    "message": "Preview Link"
+  },
+  "common_enabled": {
+    "message": "Activado"
+  },
+  "common_active": {
+    "message": "Activo"
+  },
+  "common_mode": {
+    "message": "Modo"
+  },
+  "common_language": {
+    "message": "Idioma"
+  },
+  "common_millisecondsValue": {
+    "message": "$1 ms"
+  },
+  "popup_documentTitle": {
+    "message": "Preview Link"
+  },
+  "popup_subtitle": {
+    "message": "Configuración rápida"
+  },
+  "popup_interaction_title": {
+    "message": "Cómo se abren las vistas previas"
+  },
+  "popup_interaction_description": {
+    "message": "Elige si las vistas previas se abren al pasar el cursor o al pulsar una tecla."
+  },
+  "popup_openSettings": {
+    "message": "Abrir configuración"
+  },
+  "settings_documentTitle": {
+    "message": "Configuración de Preview Link"
+  },
+  "settings_header_title": {
+    "message": "Configuración de Preview Link"
+  },
+  "settings_header_intro": {
+    "message": "Los cambios se guardan automáticamente."
+  },
+  "settings_tabs_ariaLabel": {
+    "message": "Secciones de configuración"
+  },
+  "settings_tabs_general": {
+    "message": "General"
+  },
+  "settings_tabs_previewBehavior": {
+    "message": "Comportamiento de la vista previa"
+  },
+  "settings_tabs_features": {
+    "message": "Funciones"
+  },
+  "settings_tabs_compatibility": {
+    "message": "Compatibilidad"
+  },
+  "settings_tabs_appearanceLanguage": {
+    "message": "Apariencia e idioma"
+  },
+  "settings_tabs_actions": {
+    "message": "Acciones"
+  },
+  "settings_general_title": {
+    "message": "General"
+  },
+  "settings_enabled_title": {
+    "message": "Activado"
+  },
+  "settings_enabled_description": {
+    "message": "Activa o desactiva Preview Link."
+  },
+  "settings_interaction_title": {
+    "message": "Cómo se abren las vistas previas"
+  },
+  "settings_interaction_description": {
+    "message": "Elige si las vistas previas se abren al pasar el cursor o al pulsar una tecla."
+  },
+  "settings_hoverDelay_title": {
+    "message": "Retraso al pasar el cursor"
+  },
+  "settings_hoverDelay_description": {
+    "message": "Espera antes de abrir una vista previa."
+  },
+  "settings_hoverDelay_range": {
+    "message": "$1-$2 ms"
+  },
+  "settings_triggerKey_title": {
+    "message": "Tecla de activación"
+  },
+  "settings_previewBehavior_title": {
+    "message": "Comportamiento de la vista previa"
+  },
+  "settings_previewSize_title": {
+    "message": "Tamaño predeterminado de la vista previa"
+  },
+  "settings_previewSize_description": {
+    "message": "Cambiar las unidades restablece el ancho y el alto a los valores predeterminados de esa unidad."
+  },
+  "settings_previewSize_percent": {
+    "message": "Porcentaje"
+  },
+  "settings_previewSize_pixels": {
+    "message": "Píxeles"
+  },
+  "settings_previewSize_width": {
+    "message": "Ancho"
+  },
+  "settings_previewSize_height": {
+    "message": "Alto"
+  },
+  "settings_previewSize_helper_percent": {
+    "message": "Rango permitido: $1-$2%"
+  },
+  "settings_previewSize_helper_px": {
+    "message": "Mínimo: ancho $1px, alto $2px"
+  },
+  "settings_maxPopups_title": {
+    "message": "Máximo de vistas previas abiertas"
+  },
+  "settings_maxPopups_minimum": {
+    "message": "Mínimo $1"
+  },
+  "settings_features_title": {
+    "message": "Funciones"
+  },
+  "settings_readerMode_title": {
+    "message": "Sugerencias de modo lectura"
+  },
+  "settings_readerMode_description": {
+    "message": "Sugiere una vista de lectura más limpia cuando encaja con la página."
+  },
+  "settings_videoMode_title": {
+    "message": "Modo vídeo"
+  },
+  "settings_videoMode_description": {
+    "message": "Mantén activado el comportamiento de vista previa pensado para vídeo."
+  },
+  "settings_compatibility_title": {
+    "message": "Compatibilidad"
+  },
+  "settings_compatibility_intro": {
+    "message": "Cambia esto solo si un sitio tiene problemas."
+  },
+  "settings_aggressiveCompatibility_title": {
+    "message": "Modo de compatibilidad agresivo"
+  },
+  "settings_aggressiveCompatibility_description": {
+    "message": "Usa una alternativa más fuerte para sitios que no se comportan bien dentro de la vista previa."
+  },
+  "settings_aggressiveCompatibility_warning": {
+    "message": "Advertencia: este modo puede romper sitios y debilita algunas restricciones. Déjalo desactivado salvo que estés resolviendo un problema concreto de compatibilidad."
+  },
+  "settings_appearance_title": {
+    "message": "Apariencia e idioma"
+  },
+  "settings_theme_title": {
+    "message": "Tema"
+  },
+  "settings_theme_light": {
+    "message": "Claro"
+  },
+  "settings_theme_dark": {
+    "message": "Oscuro"
+  },
+  "settings_theme_auto": {
+    "message": "Auto (System)"
+  },
+  "settings_language_title": {
+    "message": "Idioma"
+  },
+  "settings_language_option_auto": {
+    "message": "Auto (System)"
+  },
+  "settings_language_option_en": {
+    "message": "English"
+  },
+  "settings_language_option_ru": {
+    "message": "Русский"
+  },
+  "settings_language_option_es": {
+    "message": "Español"
+  },
+  "settings_language_option_zh_CN": {
+    "message": "简体中文"
+  },
+  "settings_actions_title": {
+    "message": "Acciones"
+  },
+  "settings_reset_description": {
+    "message": "Restaura cada ajuste a su valor predeterminado."
+  },
+  "settings_reset_button": {
+    "message": "Restablecer"
+  },
+  "settings_status_reset": {
+    "message": "La configuración se restableció a los valores predeterminados."
+  },
+  "interaction_hover": {
+    "message": "Solo al pasar el cursor"
+  },
+  "interaction_hoverWithKey": {
+    "message": "Cursor + tecla"
+  },
+  "a11y_interactionMode": {
+    "message": "Modo de interacción"
+  },
+  "preview_openInNewTab": {
+    "message": "Abrir vista previa en una pestaña nueva"
+  },
+  "preview_reload": {
+    "message": "Recargar vista previa"
+  },
+  "preview_close": {
+    "message": "Cerrar vista previa"
+  },
+  "preview_closeAll": {
+    "message": "Cerrar todo"
+  },
+  "preview_closeAllAriaLabel": {
+    "message": "Cerrar todas las ventanas emergentes de vista previa en esta página"
+  },
+  "fallback_openInNewTab": {
+    "message": "Abrir en una pestaña nueva"
+  },
+  "fallback_copyLink": {
+    "message": "Copiar enlace"
+  },
+  "fallback_copySuccess": {
+    "message": "Copiado"
+  },
+  "fallback_copyFailed": {
+    "message": "Error al copiar"
+  },
+  "fallback_blocked": {
+    "message": "Esta página no puede mostrarse dentro de una vista previa incrustada."
+  },
+  "fallback_loadFailed": {
+    "message": "No se pudo cargar la vista previa. Prueba a abrir la página en una pestaña nueva."
+  },
+  "notice_previewLimitReached": {
+    "message": "Se alcanzó el límite de vistas previas ($1). Cierra una vista previa existente para abrir otra."
+  },
+  "validation_interactionType_invalid": {
+    "message": "Elige un modo de interacción válido."
+  },
+  "validation_hoverDelay_range": {
+    "message": "Introduce un número entero entre $1 y $2."
+  },
+  "validation_maxPopups_min": {
+    "message": "Introduce un número entero de al menos $1."
+  },
+  "validation_popupSizeUnit_invalid": {
+    "message": "Elige porcentaje o píxeles."
+  },
+  "validation_popupWidth_min_px": {
+    "message": "El ancho mínimo es $1px."
+  },
+  "validation_popupWidth_range_percent": {
+    "message": "Introduce un valor entre $1 y $2."
+  },
+  "validation_popupHeight_min_px": {
+    "message": "La altura mínima es $1px."
+  },
+  "validation_popupHeight_range_percent": {
+    "message": "Introduce un valor entre $1 y $2."
+  },
+  "validation_themeMode_invalid": {
+    "message": "Elige Claro, Oscuro o Auto (System)."
+  },
+  "triggerKey_none": {
+    "message": "Ninguna tecla definida"
+  },
+  "triggerKey_button_set": {
+    "message": "Definir tecla"
+  },
+  "triggerKey_button_change": {
+    "message": "Cambiar tecla"
+  },
+  "triggerKey_button_capturing": {
+    "message": "Pulsa una tecla..."
+  },
+  "triggerKey_key_backquote": {
+    "message": "Backquote (`)"
+  },
+  "triggerKey_key_arrowLeft": {
+    "message": "Flecha izquierda"
+  },
+  "triggerKey_key_arrowRight": {
+    "message": "Flecha derecha"
+  },
+  "triggerKey_key_arrowUp": {
+    "message": "Flecha arriba"
+  },
+  "triggerKey_key_arrowDown": {
+    "message": "Flecha abajo"
+  },
+  "triggerKey_key_escape": {
+    "message": "Esc"
+  },
+  "triggerKey_key_space": {
+    "message": "Espacio"
+  },
+  "triggerKey_key_enter": {
+    "message": "Enter"
+  },
+  "triggerKey_key_tab": {
+    "message": "Tab"
+  },
+  "triggerKey_key_backspace": {
+    "message": "Retroceso"
+  },
+  "triggerKey_key_shift": {
+    "message": "Mayús"
+  },
+  "triggerKey_key_control": {
+    "message": "Ctrl"
+  },
+  "triggerKey_key_alt": {
+    "message": "Alt"
+  },
+  "triggerKey_key_meta": {
+    "message": "Meta"
+  },
+  "triggerKey_key_insert": {
+    "message": "Insert"
+  },
+  "triggerKey_key_delete": {
+    "message": "Supr"
+  },
+  "triggerKey_key_home": {
+    "message": "Inicio"
+  },
+  "triggerKey_key_end": {
+    "message": "Fin"
+  },
+  "triggerKey_key_pageUp": {
+    "message": "Re Pág"
+  },
+  "triggerKey_key_pageDown": {
+    "message": "Av Pág"
+  },
+  "triggerKey_key_capsLock": {
+    "message": "Bloq Mayús"
+  }
+}

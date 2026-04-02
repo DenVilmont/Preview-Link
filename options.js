@@ -5,8 +5,8 @@ document.addEventListener('DOMContentLoaded', async () => {
     resetSettings,
     subscribe,
     getValidationErrors,
-    formatTriggerKeyLabel,
-    getTriggerKeyButtonLabel,
+    getTriggerKeyLabelDescriptor,
+    getTriggerKeyButtonLabelDescriptor,
     createTriggerKeyCaptureController,
     HOVER_DELAY_MIN,
     HOVER_DELAY_MAX,
@@ -48,6 +48,7 @@ document.addEventListener('DOMContentLoaded', async () => {
     popupHeightError: document.getElementById('setting-popup-height-error'),
     popupSizeHelper: document.getElementById('setting-popup-size-helper'),
     themeMode: document.getElementById('setting-theme-mode'),
+    language: document.getElementById('setting-language'),
     readerModeSuggestions: document.getElementById('setting-reader-mode-suggestions'),
     videoModeEnabled: document.getElementById('setting-video-mode-enabled'),
     aggressiveCompatibilityMode: document.getElementById('setting-aggressive-compatibility-mode'),
@@ -62,6 +63,14 @@ document.addEventListener('DOMContentLoaded', async () => {
   form.popupHeight.step = '1';
 
   let currentSettings = await readSettings();
+  let i18n = globalThis.PreviewI18n.createFallbackUiI18n(currentSettings);
+  i18n.apply(document);
+  try {
+    i18n = await globalThis.PreviewI18n.getUiI18n(currentSettings);
+    i18n.apply(document);
+  } catch (error) {
+    console.warn('[Preview Link] Settings localization failed. Falling back gracefully.', error);
+  }
   let statusTimeoutId = null;
 
   const triggerKeyCapture = createTriggerKeyCaptureController({
@@ -98,8 +107,8 @@ document.addEventListener('DOMContentLoaded', async () => {
 
   function updatePopupSizeHelper(unit) {
     form.popupSizeHelper.textContent = unit === 'px'
-      ? `Minimum: width ${POPUP_MIN_WIDTH}px, height ${POPUP_MIN_HEIGHT}px`
-      : `Allowed range: ${POPUP_PERCENT_MIN}-${POPUP_PERCENT_MAX}%`;
+      ? i18n.t('settings_previewSize_helper_px', [POPUP_MIN_WIDTH, POPUP_MIN_HEIGHT])
+      : i18n.t('settings_previewSize_helper_percent', [POPUP_PERCENT_MIN, POPUP_PERCENT_MAX]);
   }
 
   function updatePopupSizeInputAttributes(unit) {
@@ -129,14 +138,15 @@ document.addEventListener('DOMContentLoaded', async () => {
     form.hoverDelayRow.hidden = settings.interactionType !== 'hover';
     form.triggerKeyRow.hidden = settings.interactionType !== 'hoverWithKey';
     form.hoverDelay.value = String(settings.hoverDelay);
-    form.triggerKeyDisplay.textContent = formatTriggerKeyLabel(settings.triggerKey);
-    form.triggerKeyButton.textContent = getTriggerKeyButtonLabel(settings.triggerKey, triggerKeyCapture.isCapturing());
+    form.triggerKeyDisplay.textContent = i18n.tDescriptor(getTriggerKeyLabelDescriptor(settings.triggerKey));
+    form.triggerKeyButton.textContent = i18n.tDescriptor(getTriggerKeyButtonLabelDescriptor(settings.triggerKey, triggerKeyCapture.isCapturing()));
     form.maxPopups.value = String(settings.maxPopups);
     form.popupSizeUnitPercent.checked = settings.popupSizeUnit === 'percent';
     form.popupSizeUnitPx.checked = settings.popupSizeUnit === 'px';
     form.popupWidth.value = String(settings.popupWidth);
     form.popupHeight.value = String(settings.popupHeight);
     form.themeMode.value = settings.themeMode;
+    form.language.value = settings.language;
     form.readerModeSuggestions.checked = settings.readerModeSuggestions;
     form.videoModeEnabled.checked = settings.videoModeEnabled;
     form.aggressiveCompatibilityMode.checked = settings.aggressiveCompatibilityMode;
@@ -177,10 +187,10 @@ document.addEventListener('DOMContentLoaded', async () => {
 
   function validateAndRender(fieldValues) {
     const errors = getValidationErrors(fieldValues);
-    renderFieldError(form.hoverDelayError, errors.hoverDelay);
-    renderFieldError(form.maxPopupsError, errors.maxPopups);
-    renderFieldError(form.popupWidthError, errors.popupWidth);
-    renderFieldError(form.popupHeightError, errors.popupHeight);
+    renderFieldError(form.hoverDelayError, i18n.tDescriptor(errors.hoverDelay));
+    renderFieldError(form.maxPopupsError, i18n.tDescriptor(errors.maxPopups));
+    renderFieldError(form.popupWidthError, i18n.tDescriptor(errors.popupWidth));
+    renderFieldError(form.popupHeightError, i18n.tDescriptor(errors.popupHeight));
     return errors;
   }
 
@@ -312,6 +322,11 @@ document.addEventListener('DOMContentLoaded', async () => {
     await savePatch({ themeMode: form.themeMode.value });
   });
 
+  form.language.addEventListener('change', async () => {
+    await writeSettingsPatch({ language: form.language.value });
+    window.location.reload();
+  });
+
   form.readerModeSuggestions.addEventListener('change', async () => {
     await savePatch({ readerModeSuggestions: form.readerModeSuggestions.checked });
   });
@@ -326,9 +341,9 @@ document.addEventListener('DOMContentLoaded', async () => {
 
   form.resetButton.addEventListener('click', async () => {
     render(await resetSettings());
-    showStatus('Settings reset to defaults.');
+    showStatus(i18n.t('settings_status_reset'));
   });
 
-  document.getElementById('hover-delay-range').textContent = `${HOVER_DELAY_MIN}-${HOVER_DELAY_MAX} ms`;
-  document.getElementById('max-popups-min').textContent = String(MAX_POPUPS_MIN);
+  document.getElementById('hover-delay-range').textContent = i18n.t('settings_hoverDelay_range', [HOVER_DELAY_MIN, HOVER_DELAY_MAX]);
+  document.getElementById('max-popups-min').textContent = i18n.t('settings_maxPopups_minimum', [MAX_POPUPS_MIN]);
 });

@@ -1,0 +1,356 @@
+{
+  "manifest_name": {
+    "message": "Preview Link"
+  },
+  "manifest_description": {
+    "message": "Without tabs: preview any link's content instantly on hover, without opening extra tabs."
+  },
+  "manifest_actionTitle": {
+    "message": "Preview Link"
+  },
+  "common_appName": {
+    "message": "Preview Link"
+  },
+  "common_enabled": {
+    "message": "Enabled"
+  },
+  "common_active": {
+    "message": "Active"
+  },
+  "common_mode": {
+    "message": "Mode"
+  },
+  "common_language": {
+    "message": "Language"
+  },
+  "common_millisecondsValue": {
+    "message": "$1 ms"
+  },
+  "popup_documentTitle": {
+    "message": "Preview Link"
+  },
+  "popup_subtitle": {
+    "message": "Quick settings"
+  },
+  "popup_interaction_title": {
+    "message": "How previews open"
+  },
+  "popup_interaction_description": {
+    "message": "Choose whether previews open on hover or when you press a key."
+  },
+  "popup_openSettings": {
+    "message": "Open settings"
+  },
+  "settings_documentTitle": {
+    "message": "Preview Link Settings"
+  },
+  "settings_header_title": {
+    "message": "Preview Link settings"
+  },
+  "settings_header_intro": {
+    "message": "Changes save automatically."
+  },
+  "settings_tabs_ariaLabel": {
+    "message": "Settings sections"
+  },
+  "settings_tabs_general": {
+    "message": "General"
+  },
+  "settings_tabs_previewBehavior": {
+    "message": "Preview behavior"
+  },
+  "settings_tabs_features": {
+    "message": "Features"
+  },
+  "settings_tabs_compatibility": {
+    "message": "Compatibility"
+  },
+  "settings_tabs_appearanceLanguage": {
+    "message": "Appearance & language"
+  },
+  "settings_tabs_actions": {
+    "message": "Actions"
+  },
+  "settings_general_title": {
+    "message": "General"
+  },
+  "settings_enabled_title": {
+    "message": "Enabled"
+  },
+  "settings_enabled_description": {
+    "message": "Turn Preview Link on or off."
+  },
+  "settings_interaction_title": {
+    "message": "How previews open"
+  },
+  "settings_interaction_description": {
+    "message": "Choose whether previews open on hover or when you press a key."
+  },
+  "settings_hoverDelay_title": {
+    "message": "Hover delay"
+  },
+  "settings_hoverDelay_description": {
+    "message": "Wait before opening a preview."
+  },
+  "settings_hoverDelay_range": {
+    "message": "$1-$2 ms"
+  },
+  "settings_triggerKey_title": {
+    "message": "Trigger key"
+  },
+  "settings_previewBehavior_title": {
+    "message": "Preview behavior"
+  },
+  "settings_previewSize_title": {
+    "message": "Preview size defaults"
+  },
+  "settings_previewSize_description": {
+    "message": "Switching units resets width and height to that unit's defaults."
+  },
+  "settings_previewSize_percent": {
+    "message": "Percent"
+  },
+  "settings_previewSize_pixels": {
+    "message": "Pixels"
+  },
+  "settings_previewSize_width": {
+    "message": "Width"
+  },
+  "settings_previewSize_height": {
+    "message": "Height"
+  },
+  "settings_previewSize_helper_percent": {
+    "message": "Allowed range: $1-$2%"
+  },
+  "settings_previewSize_helper_px": {
+    "message": "Minimum: width $1px, height $2px"
+  },
+  "settings_maxPopups_title": {
+    "message": "Maximum open previews"
+  },
+  "settings_maxPopups_minimum": {
+    "message": "Minimum $1"
+  },
+  "settings_features_title": {
+    "message": "Features"
+  },
+  "settings_readerMode_title": {
+    "message": "Reader mode suggestions"
+  },
+  "settings_readerMode_description": {
+    "message": "Suggest a cleaner reading view when it fits the page."
+  },
+  "settings_videoMode_title": {
+    "message": "Video mode"
+  },
+  "settings_videoMode_description": {
+    "message": "Keep video-friendly preview behavior on."
+  },
+  "settings_compatibility_title": {
+    "message": "Compatibility"
+  },
+  "settings_compatibility_intro": {
+    "message": "Only change this if a site is having trouble."
+  },
+  "settings_aggressiveCompatibility_title": {
+    "message": "Aggressive compatibility mode"
+  },
+  "settings_aggressiveCompatibility_description": {
+    "message": "Use a stronger fallback for sites that do not behave well in preview."
+  },
+  "settings_aggressiveCompatibility_warning": {
+    "message": "Warning: this mode may break sites and weakens some restrictions. Leave it off unless you are troubleshooting a specific compatibility problem."
+  },
+  "settings_appearance_title": {
+    "message": "Appearance & language"
+  },
+  "settings_theme_title": {
+    "message": "Theme"
+  },
+  "settings_theme_light": {
+    "message": "Light"
+  },
+  "settings_theme_dark": {
+    "message": "Dark"
+  },
+  "settings_theme_auto": {
+    "message": "Auto (System)"
+  },
+  "settings_language_title": {
+    "message": "Language"
+  },
+  "settings_language_option_auto": {
+    "message": "Auto (System)"
+  },
+  "settings_language_option_en": {
+    "message": "English"
+  },
+  "settings_language_option_ru": {
+    "message": "Русский"
+  },
+  "settings_language_option_es": {
+    "message": "Español"
+  },
+  "settings_language_option_zh_CN": {
+    "message": "简体中文"
+  },
+  "settings_actions_title": {
+    "message": "Actions"
+  },
+  "settings_reset_description": {
+    "message": "Restore every setting to its default value."
+  },
+  "settings_reset_button": {
+    "message": "Reset"
+  },
+  "settings_status_reset": {
+    "message": "Settings reset to defaults."
+  },
+  "interaction_hover": {
+    "message": "Hover only"
+  },
+  "interaction_hoverWithKey": {
+    "message": "Hover + key"
+  },
+  "a11y_interactionMode": {
+    "message": "Interaction mode"
+  },
+  "preview_openInNewTab": {
+    "message": "Open preview in new tab"
+  },
+  "preview_reload": {
+    "message": "Reload preview"
+  },
+  "preview_close": {
+    "message": "Close preview"
+  },
+  "preview_closeAll": {
+    "message": "Close all"
+  },
+  "preview_closeAllAriaLabel": {
+    "message": "Close all preview popups on this page"
+  },
+  "fallback_openInNewTab": {
+    "message": "Open in new tab"
+  },
+  "fallback_copyLink": {
+    "message": "Copy link"
+  },
+  "fallback_copySuccess": {
+    "message": "Copied"
+  },
+  "fallback_copyFailed": {
+    "message": "Copy failed"
+  },
+  "fallback_blocked": {
+    "message": "This page cannot be shown in an embedded preview."
+  },
+  "fallback_loadFailed": {
+    "message": "Preview failed to load. Try opening the page in a new tab."
+  },
+  "notice_previewLimitReached": {
+    "message": "Preview limit reached ($1). Close an existing preview to open another."
+  },
+  "validation_interactionType_invalid": {
+    "message": "Choose a valid interaction mode."
+  },
+  "validation_hoverDelay_range": {
+    "message": "Enter a whole number from $1 to $2."
+  },
+  "validation_maxPopups_min": {
+    "message": "Enter a whole number of at least $1."
+  },
+  "validation_popupSizeUnit_invalid": {
+    "message": "Choose percent or pixels."
+  },
+  "validation_popupWidth_min_px": {
+    "message": "Minimum width is $1px."
+  },
+  "validation_popupWidth_range_percent": {
+    "message": "Enter a value from $1 to $2."
+  },
+  "validation_popupHeight_min_px": {
+    "message": "Minimum height is $1px."
+  },
+  "validation_popupHeight_range_percent": {
+    "message": "Enter a value from $1 to $2."
+  },
+  "validation_themeMode_invalid": {
+    "message": "Choose Light, Dark, or Auto (System)."
+  },
+  "triggerKey_none": {
+    "message": "No key set"
+  },
+  "triggerKey_button_set": {
+    "message": "Set key"
+  },
+  "triggerKey_button_change": {
+    "message": "Change key"
+  },
+  "triggerKey_button_capturing": {
+    "message": "Press a key..."
+  },
+  "triggerKey_key_backquote": {
+    "message": "Backquote (`)"
+  },
+  "triggerKey_key_arrowLeft": {
+    "message": "Left Arrow"
+  },
+  "triggerKey_key_arrowRight": {
+    "message": "Right Arrow"
+  },
+  "triggerKey_key_arrowUp": {
+    "message": "Up Arrow"
+  },
+  "triggerKey_key_arrowDown": {
+    "message": "Down Arrow"
+  },
+  "triggerKey_key_escape": {
+    "message": "Esc"
+  },
+  "triggerKey_key_space": {
+    "message": "Space"
+  },
+  "triggerKey_key_enter": {
+    "message": "Enter"
+  },
+  "triggerKey_key_tab": {
+    "message": "Tab"
+  },
+  "triggerKey_key_backspace": {
+    "message": "Backspace"
+  },
+  "triggerKey_key_shift": {
+    "message": "Shift"
+  },
+  "triggerKey_key_control": {
+    "message": "Ctrl"
+  },
+  "triggerKey_key_alt": {
+    "message": "Alt"
+  },
+  "triggerKey_key_meta": {
+    "message": "Meta"
+  },
+  "triggerKey_key_insert": {
+    "message": "Insert"
+  },
+  "triggerKey_key_delete": {
+    "message": "Delete"
+  },
+  "triggerKey_key_home": {
+    "message": "Home"
+  },
+  "triggerKey_key_end": {
+    "message": "End"
+  },
+  "triggerKey_key_pageUp": {
+    "message": "Page Up"
+  },
+  "triggerKey_key_pageDown": {
+    "message": "Page Down"
+  },
+  "triggerKey_key_capsLock": {
+    "message": "Caps Lock"
+  }
+}

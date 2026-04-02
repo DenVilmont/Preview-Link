@@ -1,0 +1,356 @@
+{
+  "manifest_name": {
+    "message": "Preview Link"
+  },
+  "manifest_description": {
+    "message": "Без вкладок: мгновенно просматривайте содержимое любой ссылки по наведению, не открывая лишние вкладки."
+  },
+  "manifest_actionTitle": {
+    "message": "Preview Link"
+  },
+  "common_appName": {
+    "message": "Preview Link"
+  },
+  "common_enabled": {
+    "message": "Включено"
+  },
+  "common_active": {
+    "message": "Активно"
+  },
+  "common_mode": {
+    "message": "Режим"
+  },
+  "common_language": {
+    "message": "Язык"
+  },
+  "common_millisecondsValue": {
+    "message": "$1 мс"
+  },
+  "popup_documentTitle": {
+    "message": "Preview Link"
+  },
+  "popup_subtitle": {
+    "message": "Быстрые настройки"
+  },
+  "popup_interaction_title": {
+    "message": "Как открываются превью"
+  },
+  "popup_interaction_description": {
+    "message": "Выберите, открывать ли превью по наведению или при нажатии клавиши."
+  },
+  "popup_openSettings": {
+    "message": "Открыть настройки"
+  },
+  "settings_documentTitle": {
+    "message": "Настройки Preview Link"
+  },
+  "settings_header_title": {
+    "message": "Настройки Preview Link"
+  },
+  "settings_header_intro": {
+    "message": "Изменения сохраняются автоматически."
+  },
+  "settings_tabs_ariaLabel": {
+    "message": "Разделы настроек"
+  },
+  "settings_tabs_general": {
+    "message": "Общие"
+  },
+  "settings_tabs_previewBehavior": {
+    "message": "Поведение превью"
+  },
+  "settings_tabs_features": {
+    "message": "Функции"
+  },
+  "settings_tabs_compatibility": {
+    "message": "Совместимость"
+  },
+  "settings_tabs_appearanceLanguage": {
+    "message": "Внешний вид и язык"
+  },
+  "settings_tabs_actions": {
+    "message": "Действия"
+  },
+  "settings_general_title": {
+    "message": "Общие"
+  },
+  "settings_enabled_title": {
+    "message": "Включено"
+  },
+  "settings_enabled_description": {
+    "message": "Включить или выключить Preview Link."
+  },
+  "settings_interaction_title": {
+    "message": "Как открываются превью"
+  },
+  "settings_interaction_description": {
+    "message": "Выберите, открывать ли превью по наведению или при нажатии клавиши."
+  },
+  "settings_hoverDelay_title": {
+    "message": "Задержка наведения"
+  },
+  "settings_hoverDelay_description": {
+    "message": "Сколько ждать перед открытием превью."
+  },
+  "settings_hoverDelay_range": {
+    "message": "$1-$2 мс"
+  },
+  "settings_triggerKey_title": {
+    "message": "Клавиша запуска"
+  },
+  "settings_previewBehavior_title": {
+    "message": "Поведение превью"
+  },
+  "settings_previewSize_title": {
+    "message": "Размер превью по умолчанию"
+  },
+  "settings_previewSize_description": {
+    "message": "При смене единиц ширина и высота сбрасываются к значениям по умолчанию для этих единиц."
+  },
+  "settings_previewSize_percent": {
+    "message": "Проценты"
+  },
+  "settings_previewSize_pixels": {
+    "message": "Пиксели"
+  },
+  "settings_previewSize_width": {
+    "message": "Ширина"
+  },
+  "settings_previewSize_height": {
+    "message": "Высота"
+  },
+  "settings_previewSize_helper_percent": {
+    "message": "Допустимый диапазон: $1-$2%"
+  },
+  "settings_previewSize_helper_px": {
+    "message": "Минимум: ширина $1px, высота $2px"
+  },
+  "settings_maxPopups_title": {
+    "message": "Максимум открытых превью"
+  },
+  "settings_maxPopups_minimum": {
+    "message": "Минимум $1"
+  },
+  "settings_features_title": {
+    "message": "Функции"
+  },
+  "settings_readerMode_title": {
+    "message": "Подсказки режима чтения"
+  },
+  "settings_readerMode_description": {
+    "message": "Предлагать более удобный режим чтения, когда он подходит странице."
+  },
+  "settings_videoMode_title": {
+    "message": "Видеорежим"
+  },
+  "settings_videoMode_description": {
+    "message": "Оставлять включенным поведение превью, удобное для видео."
+  },
+  "settings_compatibility_title": {
+    "message": "Совместимость"
+  },
+  "settings_compatibility_intro": {
+    "message": "Меняйте это только если у сайта есть проблемы."
+  },
+  "settings_aggressiveCompatibility_title": {
+    "message": "Агрессивный режим совместимости"
+  },
+  "settings_aggressiveCompatibility_description": {
+    "message": "Использовать более сильный резервный режим для сайтов, которые плохо работают в превью."
+  },
+  "settings_aggressiveCompatibility_warning": {
+    "message": "Предупреждение: этот режим может ломать сайты и ослабляет некоторые ограничения. Оставляйте его выключенным, если не устраняете конкретную проблему совместимости."
+  },
+  "settings_appearance_title": {
+    "message": "Внешний вид и язык"
+  },
+  "settings_theme_title": {
+    "message": "Тема"
+  },
+  "settings_theme_light": {
+    "message": "Светлая"
+  },
+  "settings_theme_dark": {
+    "message": "Темная"
+  },
+  "settings_theme_auto": {
+    "message": "Auto (System)"
+  },
+  "settings_language_title": {
+    "message": "Язык"
+  },
+  "settings_language_option_auto": {
+    "message": "Auto (System)"
+  },
+  "settings_language_option_en": {
+    "message": "English"
+  },
+  "settings_language_option_ru": {
+    "message": "Русский"
+  },
+  "settings_language_option_es": {
+    "message": "Español"
+  },
+  "settings_language_option_zh_CN": {
+    "message": "简体中文"
+  },
+  "settings_actions_title": {
+    "message": "Действия"
+  },
+  "settings_reset_description": {
+    "message": "Вернуть все настройки к значениям по умолчанию."
+  },
+  "settings_reset_button": {
+    "message": "Сбросить"
+  },
+  "settings_status_reset": {
+    "message": "Настройки сброшены к значениям по умолчанию."
+  },
+  "interaction_hover": {
+    "message": "Только наведение"
+  },
+  "interaction_hoverWithKey": {
+    "message": "Наведение + клавиша"
+  },
+  "a11y_interactionMode": {
+    "message": "Режим взаимодействия"
+  },
+  "preview_openInNewTab": {
+    "message": "Открыть превью в новой вкладке"
+  },
+  "preview_reload": {
+    "message": "Перезагрузить превью"
+  },
+  "preview_close": {
+    "message": "Закрыть превью"
+  },
+  "preview_closeAll": {
+    "message": "Закрыть все"
+  },
+  "preview_closeAllAriaLabel": {
+    "message": "Закрыть все всплывающие превью на этой странице"
+  },
+  "fallback_openInNewTab": {
+    "message": "Открыть в новой вкладке"
+  },
+  "fallback_copyLink": {
+    "message": "Копировать ссылку"
+  },
+  "fallback_copySuccess": {
+    "message": "Скопировано"
+  },
+  "fallback_copyFailed": {
+    "message": "Не удалось скопировать"
+  },
+  "fallback_blocked": {
+    "message": "Эту страницу нельзя показать во встроенном превью."
+  },
+  "fallback_loadFailed": {
+    "message": "Не удалось загрузить превью. Попробуйте открыть страницу в новой вкладке."
+  },
+  "notice_previewLimitReached": {
+    "message": "Достигнут лимит превью ($1). Закройте одно из открытых превью, чтобы открыть новое."
+  },
+  "validation_interactionType_invalid": {
+    "message": "Выберите корректный режим взаимодействия."
+  },
+  "validation_hoverDelay_range": {
+    "message": "Введите целое число от $1 до $2."
+  },
+  "validation_maxPopups_min": {
+    "message": "Введите целое число не меньше $1."
+  },
+  "validation_popupSizeUnit_invalid": {
+    "message": "Выберите проценты или пиксели."
+  },
+  "validation_popupWidth_min_px": {
+    "message": "Минимальная ширина: $1px."
+  },
+  "validation_popupWidth_range_percent": {
+    "message": "Введите значение от $1 до $2."
+  },
+  "validation_popupHeight_min_px": {
+    "message": "Минимальная высота: $1px."
+  },
+  "validation_popupHeight_range_percent": {
+    "message": "Введите значение от $1 до $2."
+  },
+  "validation_themeMode_invalid": {
+    "message": "Выберите светлую, темную тему или Auto (System)."
+  },
+  "triggerKey_none": {
+    "message": "Клавиша не задана"
+  },
+  "triggerKey_button_set": {
+    "message": "Установить"
+  },
+  "triggerKey_button_change": {
+    "message": "Изменить"
+  },
+  "triggerKey_button_capturing": {
+    "message": "Нажмите клавишу..."
+  },
+  "triggerKey_key_backquote": {
+    "message": "Backquote (`)"
+  },
+  "triggerKey_key_arrowLeft": {
+    "message": "Стрелка влево"
+  },
+  "triggerKey_key_arrowRight": {
+    "message": "Стрелка вправо"
+  },
+  "triggerKey_key_arrowUp": {
+    "message": "Стрелка вверх"
+  },
+  "triggerKey_key_arrowDown": {
+    "message": "Стрелка вниз"
+  },
+  "triggerKey_key_escape": {
+    "message": "Esc"
+  },
+  "triggerKey_key_space": {
+    "message": "Пробел"
+  },
+  "triggerKey_key_enter": {
+    "message": "Enter"
+  },
+  "triggerKey_key_tab": {
+    "message": "Tab"
+  },
+  "triggerKey_key_backspace": {
+    "message": "Backspace"
+  },
+  "triggerKey_key_shift": {
+    "message": "Shift"
+  },
+  "triggerKey_key_control": {
+    "message": "Ctrl"
+  },
+  "triggerKey_key_alt": {
+    "message": "Alt"
+  },
+  "triggerKey_key_meta": {
+    "message": "Meta"
+  },
+  "triggerKey_key_insert": {
+    "message": "Insert"
+  },
+  "triggerKey_key_delete": {
+    "message": "Delete"
+  },
+  "triggerKey_key_home": {
+    "message": "Home"
+  },
+  "triggerKey_key_end": {
+    "message": "End"
+  },
+  "triggerKey_key_pageUp": {
+    "message": "Page Up"
+  },
+  "triggerKey_key_pageDown": {
+    "message": "Page Down"
+  },
+  "triggerKey_key_capsLock": {
+    "message": "Caps Lock"
+  }
+}

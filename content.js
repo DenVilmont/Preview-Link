@@ -6,6 +6,9 @@ const {
   DEFAULT_SETTINGS
 } = globalThis.PreviewSettings;
 const {
+  getUiI18n
+} = globalThis.PreviewI18n;
+const {
   applyThemeMarker,
   buildThemeTokenCss,
   subscribeToSystemThemeChange
@@ -20,6 +23,9 @@ let enabled = DEFAULT_SETTINGS.enabled;
 let interactionType = DEFAULT_SETTINGS.interactionType;
 let triggerKey = DEFAULT_SETTINGS.triggerKey;
 let currentThemeMode = DEFAULT_SETTINGS.themeMode;
+let currentI18n = getUiI18n
+  ? globalThis.PreviewI18n.createFallbackUiI18n(DEFAULT_SETTINGS)
+  : null;
 let listenersAttached = false;
 const DEBUG_PREVIEW = false;
 const ORIGINAL_LIVENESS_GRACE_MS = 1000;
@@ -82,6 +88,25 @@ function applyStoredSettings(settings) {
   currentThemeMode = settings.themeMode;
 }
 
+async function updateUiI18n(settings) {
+  currentI18n = await getUiI18n(settings);
+  return currentI18n;
+}
+
+function t(messageKey, substitutions = []) {
+  if (!currentI18n) {
+    return globalThis.chrome?.i18n?.getMessage?.(messageKey, substitutions) || '';
+  }
+  return currentI18n.t(messageKey, substitutions);
+}
+
+function refreshUiI18n(settings) {
+  return updateUiI18n(settings).catch((error) => {
+    console.warn('[Preview Link] UI localization failed in content runtime. Core preview behavior will continue.', error);
+    return currentI18n;
+  });
+}
+
 function getInitialPopupSize(settings) {
   const normalizedSettings = normalizePreviewSizeSettings(settings || popupSizeSettings);
   const width = normalizedSettings.popupSizeUnit === 'percent'
@@ -106,6 +131,7 @@ readSettings().then((settings) => {
 
   // Attach listeners if extension is enabled
   if (enabled && !runtimeContext.isPreviewPopupRuntime) attachListeners();
+  refreshUiI18n(settings);
 });
 
 const unsubscribeSystemThemeChange = ownsVisibleThemeSurfaces()
@@ -652,9 +678,6 @@ chrome.storage.onChanged.addListener((changes, area) => {
     const previousInteractionType = interactionType;
 
     applyStoredSettings(settings);
-    if (ownsVisibleThemeSurfaces()) {
-      applyThemeToMountedSurfaces();
-    }
 
     if (previousInteractionType !== interactionType) {
       dispatchHoverClear();
@@ -663,14 +686,18 @@ chrome.storage.onChanged.addListener((changes, area) => {
 
     if (enabled && !runtimeContext.isPreviewPopupRuntime) {
       attachListeners();
-      return;
+    } else {
+      detachListeners();
+      if (wasEnabled && !enabled && runtimeContext.isTopWindow) {
+        popups.slice().forEach((p) => closePopup(p.popupId));
+        popups = [];
+      }
     }
 
-    detachListeners();
-    if (wasEnabled && !enabled && runtimeContext.isTopWindow) {
-      popups.slice().forEach((p) => closePopup(p.popupId));
-      popups = [];
+    if (ownsVisibleThemeSurfaces()) {
+      applyThemeToMountedSurfaces();
     }
+    refreshUiI18n(settings);
   });
 });
 
@@ -775,9 +802,10 @@ function scheduleLimitNoticeRemoval(notice) {
 
 function showLimitReachedNotice() {
     ensureContentThemeSurfaceStyles();
+    const message = t('notice_previewLimitReached', [MAX_POPUPS]);
     const existing = document.getElementById('link-preview-limit-notice');
     if (existing) {
-        existing.textContent = `Preview limit reached (${MAX_POPUPS}). Close an existing preview to open another.`;
+        existing.textContent = message;
         applyThemeMarker(existing, currentThemeMode);
         existing.style.opacity = '1';
         scheduleLimitNoticeRemoval(existing);
@@ -787,7 +815,9 @@ function showLimitReachedNotice() {
     const notice = document.createElement('div');
     notice.id = 'link-preview-limit-notice';
     notice.className = 'link-preview-theme-surface link-preview-limit-notice';
-    notice.textContent = `Preview limit reached (${MAX_POPUPS}). Close an existing preview to open another.`;
+    notice.setAttribute('role', 'status');
+    notice.setAttribute('aria-live', 'polite');
+    notice.textContent = message;
     applyThemeMarker(notice, currentThemeMode);
     document.body.appendChild(notice);
     requestAnimationFrame(() => {
@@ -1068,13 +1098,16 @@ const POPUP_CONTROL_ICON_MARKUP = {
     reload: '<svg viewBox="0 0 20 20" aria-hidden="true"><path d="M16 10a6 6 0 1 1-2.1-4.58"></path><path d="M16 4v4h-4"></path></svg>',
     close: '<svg viewBox="0 0 20 20" aria-hidden="true"><path d="M6 6l8 8"></path><path d="M14 6l-8 8"></path></svg>'
 };
-const POPUP_HEADER_LABELS = {
-    openInNewTab: 'Open preview in new tab',
-    reloadPreview: 'Reload preview',
-    closePreview: 'Close preview',
-    closeAllText: 'Close all',
-    closeAllAriaLabel: 'Close all preview popups on this page'
-};
+
+function getPopupHeaderLabels() {
+    return {
+        openInNewTab: t('preview_openInNewTab'),
+        reloadPreview: t('preview_reload'),
+        closePreview: t('preview_close'),
+        closeAllText: t('preview_closeAll'),
+        closeAllAriaLabel: t('preview_closeAllAriaLabel')
+    };
+}
 
 function applyPopupCoordinates(popupEntry, left, top) {
     if (!popupEntry || !popupEntry.popup) return;
@@ -1536,6 +1569,7 @@ function createPopup(url, x, y, anchorRect, options = {}) {
 
     let popup = document.createElement('div');
     const shadowRoot = popup.attachShadow({ mode: 'open' });
+    const popupHeaderLabels = getPopupHeaderLabels();
     const initialSize = getInitialPopupSize(popupSizeSettings);
     // Assign initial stacking order
     popup.style.zIndex = ++zIndexCounter;
@@ -1556,8 +1590,8 @@ function createPopup(url, x, y, anchorRect, options = {}) {
 
     let closeAllBtn = createPopupTextActionButton(
         'link-preview-topbar-action--close-all',
-        POPUP_HEADER_LABELS.closeAllText,
-        POPUP_HEADER_LABELS.closeAllAriaLabel,
+        popupHeaderLabels.closeAllText,
+        popupHeaderLabels.closeAllAriaLabel,
         () => {
             closeAllPopups();
         }
@@ -1578,7 +1612,7 @@ function createPopup(url, x, y, anchorRect, options = {}) {
     popupEntry.loadingBar = loadingBar;
 
     // New tab button
-    let newTabBtn = createPopupControlButton('link-preview-control--newtab', POPUP_HEADER_LABELS.openInNewTab, 'newtab', () => {
+    let newTabBtn = createPopupControlButton('link-preview-control--newtab', popupHeaderLabels.openInNewTab, 'newtab', () => {
         const externalOpenUrl = getPopupExternalOpenUrl(popupEntry);
         if (externalOpenUrl) {
             window.open(externalOpenUrl, '_blank');
@@ -1588,13 +1622,13 @@ function createPopup(url, x, y, anchorRect, options = {}) {
     topBar.appendChild(newTabBtn);
 
     // Reload button
-    let reloadBtn = createPopupControlButton('link-preview-control--reload', POPUP_HEADER_LABELS.reloadPreview, 'reload', () => {
+    let reloadBtn = createPopupControlButton('link-preview-control--reload', popupHeaderLabels.reloadPreview, 'reload', () => {
         reloadPopup(popupEntry.popupId);
     });
     topBar.appendChild(reloadBtn);
 
     // Close button
-    let closeBtn = createPopupControlButton('link-preview-control--close', POPUP_HEADER_LABELS.closePreview, 'close', () => {
+    let closeBtn = createPopupControlButton('link-preview-control--close', popupHeaderLabels.closePreview, 'close', () => {
         closePopup(popupEntry.popupId);
     });
     topBar.appendChild(closeBtn);
@@ -1748,6 +1782,8 @@ function finishPopupLoadingState(popupEntry) {
 
 function renderPopupFallback(popupEntry, message, state) {
     const fallbackUrl = getPopupExternalOpenUrl(popupEntry) || popupEntry.originalUrl || popupEntry.requestedUrl;
+    const openLabel = t('fallback_openInNewTab');
+    const copyLabel = t('fallback_copyLink');
     const fallback = document.createElement('div');
     fallback.className = 'link-preview-fallback';
 
@@ -1766,22 +1802,40 @@ function renderPopupFallback(popupEntry, message, state) {
     const openBtn = document.createElement('button');
     openBtn.type = 'button';
     openBtn.className = 'link-preview-fallback-action link-preview-fallback-action--primary';
-    openBtn.textContent = 'Open in new tab';
+    openBtn.textContent = openLabel;
+    openBtn.setAttribute('aria-label', openLabel);
+    openBtn.title = openLabel;
     openBtn.onclick = () => window.open(fallbackUrl, '_blank');
     actions.appendChild(openBtn);
 
     const copyBtn = document.createElement('button');
     copyBtn.type = 'button';
     copyBtn.className = 'link-preview-fallback-action';
-    copyBtn.textContent = 'Copy link';
+    copyBtn.textContent = copyLabel;
+    copyBtn.setAttribute('aria-label', copyLabel);
+    copyBtn.title = copyLabel;
     copyBtn.onclick = async () => {
         try {
             await navigator.clipboard.writeText(fallbackUrl);
-            copyBtn.textContent = 'Copied';
-            setTimeout(() => { copyBtn.textContent = 'Copy link'; }, 1200);
+            const successLabel = t('fallback_copySuccess');
+            copyBtn.textContent = successLabel;
+            copyBtn.setAttribute('aria-label', successLabel);
+            copyBtn.title = successLabel;
+            setTimeout(() => {
+                copyBtn.textContent = copyLabel;
+                copyBtn.setAttribute('aria-label', copyLabel);
+                copyBtn.title = copyLabel;
+            }, 1200);
         } catch (_) {
-            copyBtn.textContent = 'Copy failed';
-            setTimeout(() => { copyBtn.textContent = 'Copy link'; }, 1200);
+            const failedLabel = t('fallback_copyFailed');
+            copyBtn.textContent = failedLabel;
+            copyBtn.setAttribute('aria-label', failedLabel);
+            copyBtn.title = failedLabel;
+            setTimeout(() => {
+                copyBtn.textContent = copyLabel;
+                copyBtn.setAttribute('aria-label', copyLabel);
+                copyBtn.title = copyLabel;
+            }, 1200);
         }
     };
     actions.appendChild(copyBtn);
@@ -1846,19 +1900,20 @@ function finalizePopupReady(popupEntry, iframe) {
     finishPopupLoadingState(popupEntry);
 }
 
-function finalizePopupBlocked(popupEntry, message) {
+function finalizePopupBlocked(popupEntry, messageKey) {
+    const message = t(messageKey || 'fallback_blocked');
     logPreviewDebug('finalize blocked', {
         popupId: popupEntry.popupId,
         attemptId: popupEntry.activeAttemptId,
         candidateIndex: popupEntry.activeCandidateIndex,
         url: popupEntry.currentPreviewUrl,
-        message: message || 'This page cannot be shown in an embedded preview.'
+        message
     });
     finishPopupLoadingState(popupEntry);
     clearPopupBodyContent(popupEntry);
     renderPopupFallback(
         popupEntry,
-        message || 'This page cannot be shown in an embedded preview.',
+        message,
         'blocked'
     );
 }
@@ -1894,10 +1949,10 @@ function failActiveCandidate(popupEntry, attemptId, reason) {
     if (advanceToNextCandidate(popupEntry, attemptId)) {
         return;
     }
-    const message = reason === 'error'
-        ? 'Preview failed to load. Try opening the page in a new tab.'
-        : 'This page cannot be shown in an embedded preview.';
-    finalizePopupBlocked(popupEntry, message);
+    finalizePopupBlocked(
+        popupEntry,
+        reason === 'error' ? 'fallback_loadFailed' : 'fallback_blocked'
+    );
 }
 
 function mountPopupIframe(popupEntry, url) {

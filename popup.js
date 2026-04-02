@@ -3,8 +3,8 @@ document.addEventListener('DOMContentLoaded', async () => {
     readSettings,
     writeSettingsPatch,
     subscribe,
-    formatTriggerKeyLabel,
-    getTriggerKeyButtonLabel,
+    getTriggerKeyLabelDescriptor,
+    getTriggerKeyButtonLabelDescriptor,
     createTriggerKeyCaptureController,
     HOVER_DELAY_MIN,
     HOVER_DELAY_MAX,
@@ -31,6 +31,14 @@ document.addEventListener('DOMContentLoaded', async () => {
   delaySlider.max = String(HOVER_DELAY_MAX);
   delaySlider.step = String(HOVER_DELAY_STEP);
   let currentSettings = await readSettings();
+  let i18n = globalThis.PreviewI18n.createFallbackUiI18n(currentSettings);
+  i18n.apply(document);
+  try {
+    i18n = await globalThis.PreviewI18n.getUiI18n(currentSettings);
+    i18n.apply(document);
+  } catch (error) {
+    console.warn('[Preview Link] Popup localization failed. Falling back gracefully.', error);
+  }
 
   function applyTheme(settings) {
     const resolvedTheme = applyThemeMarker(document.documentElement, settings.themeMode);
@@ -59,9 +67,9 @@ document.addEventListener('DOMContentLoaded', async () => {
     interactionHover.checked = settings.interactionType === 'hover';
     interactionHoverWithKey.checked = settings.interactionType === 'hoverWithKey';
     delaySlider.value = String(settings.hoverDelay);
-    delayLabel.textContent = `${settings.hoverDelay} ms`;
-    keyDisplay.textContent = formatTriggerKeyLabel(settings.triggerKey);
-    setKeyBtn.textContent = getTriggerKeyButtonLabel(settings.triggerKey, triggerKeyCapture.isCapturing());
+    delayLabel.textContent = i18n.t('common_millisecondsValue', [settings.hoverDelay]);
+    keyDisplay.textContent = i18n.tDescriptor(getTriggerKeyLabelDescriptor(settings.triggerKey));
+    setKeyBtn.textContent = i18n.tDescriptor(getTriggerKeyButtonLabelDescriptor(settings.triggerKey, triggerKeyCapture.isCapturing()));
     delayRow.hidden = settings.interactionType !== 'hover';
     keyRow.hidden = settings.interactionType !== 'hoverWithKey';
     applyTheme(settings);
@@ -94,7 +102,7 @@ document.addEventListener('DOMContentLoaded', async () => {
   });
 
   delaySlider.addEventListener('input', () => {
-    delayLabel.textContent = `${delaySlider.value} ms`;
+    delayLabel.textContent = i18n.t('common_millisecondsValue', [delaySlider.value]);
   });
 
   delaySlider.addEventListener('change', async () => {

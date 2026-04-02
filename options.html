@@ -2,7 +2,7 @@
 <html>
 <head>
   <meta charset="UTF-8">
-  <title>Preview Link Settings</title>
+  <title data-i18n="settings_documentTitle"></title>
   <script
     src="preview-theme.js"
     data-apply-document-tokens="true"
@@ -10,6 +10,7 @@
     data-bootstrap-document-theme="true"></script>
   <script src="preview-size-config.js" defer></script>
   <script src="preview-settings.js" defer></script>
+  <script src="preview-i18n.js" defer></script>
   <script src="options.js" defer></script>
   <style>
     * {
@@ -170,6 +171,7 @@
       justify-content: space-between;
       gap: 12px;
       flex-wrap: wrap;
+      margin-top: 12px;
     }
 
     label.option,
@@ -251,56 +253,55 @@
 <body>
   <div class="page">
     <header class="header">
-      <h1>Preview Link settings</h1>
-      <p>Changes save automatically.</p>
+      <h1 data-i18n="settings_header_title"></h1>
+      <p data-i18n="settings_header_intro"></p>
     </header>
 
     <p class="status-toast" id="settings-status" role="status" aria-live="polite" hidden></p>
 
-    <nav class="tabs" aria-label="Settings sections" role="tablist">
-      <button type="button" class="tab" id="tab-general" data-tab-target="general" role="tab" aria-controls="panel-general" aria-selected="true" tabindex="0">General</button>
-      <button type="button" class="tab" id="tab-preview-behavior" data-tab-target="preview-behavior" role="tab" aria-controls="panel-preview-behavior" aria-selected="false" tabindex="-1">Preview behavior</button>
-      <button type="button" class="tab" id="tab-features" data-tab-target="features" role="tab" aria-controls="panel-features" aria-selected="false" tabindex="-1">Features</button>
-      <button type="button" class="tab" id="tab-compatibility" data-tab-target="compatibility" role="tab" aria-controls="panel-compatibility" aria-selected="false" tabindex="-1">Compatibility</button>
-      <button type="button" class="tab" id="tab-appearance-language" data-tab-target="appearance-language" role="tab" aria-controls="panel-appearance-language" aria-selected="false" tabindex="-1">Appearance &amp; language</button>
-      <button type="button" class="tab" id="tab-actions" data-tab-target="actions" role="tab" aria-controls="panel-actions" aria-selected="false" tabindex="-1">Actions</button>
+    <nav class="tabs" data-i18n-aria-label="settings_tabs_ariaLabel" role="tablist">
+      <button type="button" class="tab" id="tab-general" data-tab-target="general" role="tab" aria-controls="panel-general" aria-selected="true" tabindex="0" data-i18n="settings_tabs_general"></button>
+      <button type="button" class="tab" id="tab-preview-behavior" data-tab-target="preview-behavior" role="tab" aria-controls="panel-preview-behavior" aria-selected="false" tabindex="-1" data-i18n="settings_tabs_previewBehavior"></button>
+      <button type="button" class="tab" id="tab-features" data-tab-target="features" role="tab" aria-controls="panel-features" aria-selected="false" tabindex="-1" data-i18n="settings_tabs_features"></button>
+      <button type="button" class="tab" id="tab-compatibility" data-tab-target="compatibility" role="tab" aria-controls="panel-compatibility" aria-selected="false" tabindex="-1" data-i18n="settings_tabs_compatibility"></button>
+      <button type="button" class="tab" id="tab-appearance-language" data-tab-target="appearance-language" role="tab" aria-controls="panel-appearance-language" aria-selected="false" tabindex="-1" data-i18n="settings_tabs_appearanceLanguage"></button>
+      <button type="button" class="tab" id="tab-actions" data-tab-target="actions" role="tab" aria-controls="panel-actions" aria-selected="false" tabindex="-1" data-i18n="settings_tabs_actions"></button>
     </nav>
 
     <section class="panel" id="panel-general" data-tab-panel="general" role="tabpanel" aria-labelledby="tab-general" aria-hidden="false" tabindex="0">
-      <h2>General</h2>
-      <p class="panel-intro">Choose how previews open.</p>
+      <h2 data-i18n="settings_general_title"></h2>
       <div class="section-grid">
         <div class="setting">
           <div class="setting-header">
             <div>
-              <p class="setting-title">Enabled</p>
-              <p class="setting-copy">Turn Preview Link on or off.</p>
+              <p class="setting-title" data-i18n="settings_enabled_title"></p>
+              <p class="setting-copy" data-i18n="settings_enabled_description"></p>
             </div>
             <label class="toggle">
               <input type="checkbox" id="setting-enabled">
-              <span>Active</span>
+              <span data-i18n="common_active"></span>
             </label>
           </div>
         </div>
 
         <div class="setting">
-          <p class="setting-title">How previews open</p>
-          <p class="setting-copy">Choose whether previews open on hover or when you hold a key.</p>
+          <p class="setting-title" data-i18n="settings_interaction_title"></p>
+          <p class="setting-copy" data-i18n="settings_interaction_description"></p>
           <div class="stacked-options">
             <label class="option">
               <input type="radio" name="setting-interaction-type" id="setting-interaction-hover" value="hover">
-              <span>Hover only</span>
+              <span data-i18n="interaction_hover"></span>
             </label>
             <label class="option">
               <input type="radio" name="setting-interaction-type" id="setting-interaction-hover-with-key" value="hoverWithKey">
-              <span>Hover + key</span>
+              <span data-i18n="interaction_hoverWithKey"></span>
             </label>
           </div>
 
           <div class="interaction-details">
             <div id="setting-hover-delay-row">
-              <p class="interaction-detail-title">Hover delay</p>
-              <p class="setting-copy">Wait before opening a preview.</p>
+              <p class="interaction-detail-title" data-i18n="settings_hoverDelay_title"></p>
+              <p class="setting-copy" data-i18n="settings_hoverDelay_description"></p>
               <div class="inline-inputs">
                 <input type="number" id="setting-hover-delay" min="100" max="3000" step="100">
                 <span class="helper" id="hover-delay-range"></span>
@@ -309,11 +310,10 @@
             </div>
 
             <div id="setting-trigger-key-row" hidden>
-              <p class="interaction-detail-title">Trigger key</p>
-              <p class="setting-copy">Choose the key you want to hold while hovering.</p>
+              <p class="interaction-detail-title" data-i18n="settings_triggerKey_title"></p>
               <div class="key-row">
-                <button type="button" class="action" id="setting-trigger-key-btn">Set key</button>
-                <span class="helper" id="setting-trigger-key-display">No key set</span>
+                <button type="button" class="action" id="setting-trigger-key-btn"></button>
+                <span class="helper" id="setting-trigger-key-display"></span>
               </div>
             </div>
           </div>
@@ -322,37 +322,35 @@
     </section>
 
     <section class="panel" id="panel-preview-behavior" data-tab-panel="preview-behavior" role="tabpanel" aria-labelledby="tab-preview-behavior" aria-hidden="true" tabindex="-1" hidden>
-      <h2>Preview behavior</h2>
-      <p class="panel-intro">Set the default size and how many previews can stay open.</p>
+      <h2 data-i18n="settings_previewBehavior_title"></h2>
       <div class="section-grid">
         <div class="setting">
-          <p class="setting-title">Preview size defaults</p>
-          <p class="setting-copy">Switching units resets width and height to that unit's defaults.</p>
+          <p class="setting-title" data-i18n="settings_previewSize_title"></p>
+          <p class="setting-copy" data-i18n="settings_previewSize_description"></p>
           <div class="inline-options">
             <label class="option">
               <input type="radio" name="setting-popup-size-unit" id="setting-popup-size-unit-percent" value="percent">
-              <span>Percent</span>
+              <span data-i18n="settings_previewSize_percent"></span>
             </label>
             <label class="option">
               <input type="radio" name="setting-popup-size-unit" id="setting-popup-size-unit-px" value="px">
-              <span>Pixels</span>
+              <span data-i18n="settings_previewSize_pixels"></span>
             </label>
           </div>
           <p class="helper" id="setting-popup-size-helper"></p>
           <div class="inline-inputs">
-            <label class="option">Width <input type="number" id="setting-popup-width"></label>
-            <label class="option">Height <input type="number" id="setting-popup-height"></label>
+            <label class="option"><span data-i18n="settings_previewSize_width"></span> <input type="number" id="setting-popup-width"></label>
+            <label class="option"><span data-i18n="settings_previewSize_height"></span> <input type="number" id="setting-popup-height"></label>
           </div>
           <div class="field-error" id="setting-popup-width-error" aria-live="polite"></div>
           <div class="field-error" id="setting-popup-height-error" aria-live="polite"></div>
         </div>
 
         <div class="setting">
-          <p class="setting-title">Maximum open previews</p>
-          <p class="setting-copy">New installs and reset use 5. Saved values stay as they are.</p>
+          <p class="setting-title" data-i18n="settings_maxPopups_title"></p>
           <div class="inline-inputs">
             <input type="number" id="setting-max-popups" min="1" step="1">
-            <span class="helper">Minimum <span id="max-popups-min"></span></span>
+            <span class="helper" id="max-popups-min"></span>
           </div>
           <div class="field-error" id="setting-max-popups-error" aria-live="polite"></div>
         </div>
@@ -360,14 +358,13 @@
     </section>
 
     <section class="panel" id="panel-features" data-tab-panel="features" role="tabpanel" aria-labelledby="tab-features" aria-hidden="true" tabindex="-1" hidden>
-      <h2>Features</h2>
-      <p class="panel-intro">Optional preview features.</p>
+      <h2 data-i18n="settings_features_title"></h2>
       <div class="section-grid">
         <div class="setting">
           <label class="toggle setting-header">
             <span>
-              <span class="setting-title">Reader mode suggestions</span>
-              <span class="setting-copy">Suggest a cleaner reading view when it fits the page.</span>
+              <span class="setting-title" data-i18n="settings_readerMode_title"></span>
+              <span class="setting-copy" data-i18n="settings_readerMode_description"></span>
             </span>
             <input type="checkbox" id="setting-reader-mode-suggestions">
           </label>
@@ -376,8 +373,8 @@
         <div class="setting">
           <label class="toggle setting-header">
             <span>
-              <span class="setting-title">Video mode</span>
-              <span class="setting-copy">Keep video-friendly preview behavior on.</span>
+              <span class="setting-title" data-i18n="settings_videoMode_title"></span>
+              <span class="setting-copy" data-i18n="settings_videoMode_description"></span>
             </span>
             <input type="checkbox" id="setting-video-mode-enabled">
           </label>
@@ -386,39 +383,51 @@
     </section>
 
     <section class="panel" id="panel-compatibility" data-tab-panel="compatibility" role="tabpanel" aria-labelledby="tab-compatibility" aria-hidden="true" tabindex="-1" hidden>
-      <h2>Compatibility</h2>
-      <p class="panel-intro">Only change this if a site is having trouble.</p>
+      <h2 data-i18n="settings_compatibility_title"></h2>
+      <p class="panel-intro" data-i18n="settings_compatibility_intro"></p>
       <div class="section-grid">
         <div class="setting">
           <label class="toggle setting-header">
             <span>
-              <span class="setting-title">Aggressive compatibility mode</span>
-              <span class="setting-copy">Use a stronger fallback for sites that do not behave well in preview.</span>
+              <span class="setting-title" data-i18n="settings_aggressiveCompatibility_title"></span>
+              <span class="setting-copy" data-i18n="settings_aggressiveCompatibility_description"></span>
             </span>
             <input type="checkbox" id="setting-aggressive-compatibility-mode">
           </label>
-          <div class="warning">
-            Warning: this mode may break sites and weakens some restrictions. Leave it off unless you are troubleshooting a specific compatibility problem.
-          </div>
+          <div class="warning" data-i18n="settings_aggressiveCompatibility_warning"></div>
         </div>
       </div>
     </section>
 
     <section class="panel" id="panel-appearance-language" data-tab-panel="appearance-language" role="tabpanel" aria-labelledby="tab-appearance-language" aria-hidden="true" tabindex="-1" hidden>
-      <h2>Appearance &amp; language</h2>
-      <p class="panel-intro">Choose how extension-owned surfaces should look.</p>
+      <h2 data-i18n="settings_appearance_title"></h2>
       <div class="section-grid">
         <div class="setting">
-          <p class="setting-title">Theme</p>
-          <p class="setting-copy">Apply Light, Dark, or follow the current system preference.</p>
+          <p class="setting-title" data-i18n="settings_theme_title"></p>
           <div class="inline-inputs">
             <label class="option" for="setting-theme-mode">
-              <span>Mode</span>
+              <span data-i18n="common_mode"></span>
             </label>
             <select id="setting-theme-mode">
-              <option value="light">Light</option>
-              <option value="dark">Dark</option>
-              <option value="auto">Auto (System)</option>
+              <option value="light" data-i18n="settings_theme_light"></option>
+              <option value="dark" data-i18n="settings_theme_dark"></option>
+              <option value="auto" data-i18n="settings_theme_auto"></option>
+            </select>
+          </div>
+        </div>
+
+        <div class="setting">
+          <p class="setting-title" data-i18n="settings_language_title"></p>
+          <div class="inline-inputs">
+            <label class="option" for="setting-language">
+              <span data-i18n="common_language"></span>
+            </label>
+            <select id="setting-language">
+              <option value="auto" data-i18n="settings_language_option_auto"></option>
+              <option value="en" data-i18n="settings_language_option_en"></option>
+              <option value="ru" data-i18n="settings_language_option_ru"></option>
+              <option value="es" data-i18n="settings_language_option_es"></option>
+              <option value="zh_CN" data-i18n="settings_language_option_zh_CN"></option>
             </select>
           </div>
         </div>
@@ -426,14 +435,12 @@
     </section>
 
     <section class="panel" id="panel-actions" data-tab-panel="actions" role="tabpanel" aria-labelledby="tab-actions" aria-hidden="true" tabindex="-1" hidden>
-      <h2>Actions</h2>
-      <p class="panel-intro">Reset all saved settings.</p>
+      <h2 data-i18n="settings_actions_title"></h2>
       <div class="section-grid">
         <div class="setting">
-          <p class="setting-title">Reset to defaults</p>
-          <p class="setting-copy">Restore every setting to its default value.</p>
+          <p class="setting-copy" data-i18n="settings_reset_description"></p>
           <div class="inline-inputs">
-            <button type="button" class="action danger" id="reset-settings-btn">Reset to defaults</button>
+            <button type="button" class="action danger" id="reset-settings-btn" data-i18n="settings_reset_button"></button>
           </div>
         </div>
       </div>

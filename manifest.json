@@ -1,4 +1,5 @@
 {
+   "default_locale": "en",
    "action": {
       "default_icon": {
          "128": "icons/icon-off.png",
@@ -7,7 +8,7 @@
          "48": "icons/icon-off.png"
       },
       "default_popup": "popup.html",
-      "default_title": "Preview Link"
+      "default_title": "__MSG_manifest_actionTitle__"
    },
    "background": {
       "service_worker": "background.js"
@@ -16,12 +17,16 @@
       "open_in_tab": true,
       "page": "options.html"
    },
+   "web_accessible_resources": [ {
+      "matches": [ "\u003Call_urls>" ],
+      "resources": [ "_locales/*/messages.json" ]
+   } ],
    "content_scripts": [ {
       "all_frames": true,
-      "js": [ "preview-size-config.js", "preview-theme.js", "preview-settings.js", "preview-runtime-contract.js", "content.js", "iframe-handler.js" ],
+      "js": [ "preview-size-config.js", "preview-theme.js", "preview-settings.js", "preview-i18n.js", "preview-runtime-contract.js", "content.js", "iframe-handler.js" ],
       "matches": [ "\u003Call_urls>" ]
    } ],
-   "description": "Without Tabs: preview any link's content instantly on hover—no extra tabs needed.",
+   "description": "__MSG_manifest_description__",
    "host_permissions": [ "\u003Call_urls>" ],
    "icons": {
       "128": "icons/icon-off.png",
@@ -31,7 +36,7 @@
    },
    "key": "MIIBIjANBgkqhkiG9w0BAQEFAAOCAQ8AMIIBCgKCAQEAquSmnxaAy9U9gwhJI4m03tGrp9bNsaEjdCjrhjbzqLiGVFkCZMrxrJhiV8mUB5WXXSLwuDvea05xp/E+jB91DM7vxvCxYPrAyUB+iJvzzbALVAzHvRvEshhc0svNuwV7M4rt/xOn+EoLEnoXekMoagIFU5aVYjLs/1zIY+gp2VlFnPRsJuBgA0uViGt5O9IxtlenMVqYoTfQ5J5JvklspkQhHFNahVxB3kbENcc4BVTeoDyxOQ/bWOELhm6sILqfkw10mM+lZqQUGDyXaSFx1Pp2720OVvCCRbc8cPRYmkJkMehRTzx1e2Gths5scfqxo+8cp8ashGa3kFiDMICLKwIDAQAB",
    "manifest_version": 3,
-   "name": "Preview Link",
+   "name": "__MSG_manifest_name__",
    "permissions": [ "storage" ],
-   "version": "1.0.4.2"
+   "version": "1.0.4.3"
 }

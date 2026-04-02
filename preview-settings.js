@@ -22,25 +22,33 @@
   const SETTINGS_MODEL_VERSION_KEY = 'settingsModelVersion';
   const INTERACTION_TYPES = Object.freeze(['hover', 'hoverWithKey']);
   const THEME_MODES = Object.freeze(['light', 'dark', 'auto']);
-  const TRIGGER_KEY_LABELS = Object.freeze({
-    Backquote: 'Backquote (`)',
-    ArrowLeft: 'Left Arrow',
-    ArrowRight: 'Right Arrow',
-    ArrowUp: 'Up Arrow',
-    ArrowDown: 'Down Arrow',
-    Escape: 'Esc',
-    Space: 'Space',
-    Enter: 'Enter',
-    Tab: 'Tab',
-    Backspace: 'Backspace',
-    ShiftLeft: 'Shift',
-    ShiftRight: 'Shift',
-    ControlLeft: 'Ctrl',
-    ControlRight: 'Ctrl',
-    AltLeft: 'Alt',
-    AltRight: 'Alt',
-    MetaLeft: 'Meta',
-    MetaRight: 'Meta'
+  const LANGUAGE_SETTINGS = Object.freeze(['auto', 'en', 'ru', 'es', 'zh_CN']);
+  const TRIGGER_KEY_MESSAGE_KEYS = Object.freeze({
+    Backquote: 'triggerKey_key_backquote',
+    ArrowLeft: 'triggerKey_key_arrowLeft',
+    ArrowRight: 'triggerKey_key_arrowRight',
+    ArrowUp: 'triggerKey_key_arrowUp',
+    ArrowDown: 'triggerKey_key_arrowDown',
+    Escape: 'triggerKey_key_escape',
+    Space: 'triggerKey_key_space',
+    Enter: 'triggerKey_key_enter',
+    Tab: 'triggerKey_key_tab',
+    Backspace: 'triggerKey_key_backspace',
+    ShiftLeft: 'triggerKey_key_shift',
+    ShiftRight: 'triggerKey_key_shift',
+    ControlLeft: 'triggerKey_key_control',
+    ControlRight: 'triggerKey_key_control',
+    AltLeft: 'triggerKey_key_alt',
+    AltRight: 'triggerKey_key_alt',
+    MetaLeft: 'triggerKey_key_meta',
+    MetaRight: 'triggerKey_key_meta',
+    Insert: 'triggerKey_key_insert',
+    Delete: 'triggerKey_key_delete',
+    Home: 'triggerKey_key_home',
+    End: 'triggerKey_key_end',
+    PageUp: 'triggerKey_key_pageUp',
+    PageDown: 'triggerKey_key_pageDown',
+    CapsLock: 'triggerKey_key_capsLock'
   });
   const CANONICAL_KEYS = Object.freeze([
     'enabled',
@@ -52,6 +60,7 @@
     'popupWidth',
     'popupHeight',
     'themeMode',
+    'language',
     'readerModeSuggestions',
     'videoModeEnabled',
     'aggressiveCompatibilityMode'
@@ -68,10 +77,15 @@
     popupWidth: PREVIEW_SIZE_UNIT_DEFAULTS.percent.width,
     popupHeight: PREVIEW_SIZE_UNIT_DEFAULTS.percent.height,
     themeMode: 'auto',
+    language: 'auto',
     readerModeSuggestions: true,
     videoModeEnabled: true,
     aggressiveCompatibilityMode: false
   });
+
+  function createMessageDescriptor(messageKey, substitutions = []) {
+    return { messageKey, substitutions };
+  }
 
   function cloneDefaultSettings() {
     return { ...DEFAULT_SETTINGS };
@@ -102,6 +116,10 @@
     return THEME_MODES.includes(value) ? value : DEFAULT_SETTINGS.themeMode;
   }
 
+  function normalizeLanguageSetting(value) {
+    return LANGUAGE_SETTINGS.includes(value) ? value : DEFAULT_SETTINGS.language;
+  }
+
   function normalizeSettings(rawSettings = {}) {
     const previewSizeSettings = normalizePreviewSizeSettings(rawSettings);
     const maxPopupsFallback = rawSettings[SETTINGS_MODEL_VERSION_KEY] === SETTINGS_MODEL_VERSION
@@ -117,6 +135,7 @@
       popupWidth: previewSizeSettings.popupWidth,
       popupHeight: previewSizeSettings.popupHeight,
       themeMode: normalizeThemeMode(rawSettings.themeMode),
+      language: normalizeLanguageSetting(rawSettings.language),
       readerModeSuggestions: normalizeBoolean(rawSettings.readerModeSuggestions, DEFAULT_SETTINGS.readerModeSuggestions),
       videoModeEnabled: normalizeBoolean(rawSettings.videoModeEnabled, DEFAULT_SETTINGS.videoModeEnabled),
       aggressiveCompatibilityMode: normalizeBoolean(rawSettings.aggressiveCompatibilityMode, DEFAULT_SETTINGS.aggressiveCompatibilityMode)
@@ -131,33 +150,33 @@
       candidateSettings.interactionType !== 'button' &&
       !INTERACTION_TYPES.includes(candidateSettings.interactionType)
     ) {
-      errors.interactionType = 'Choose a valid interaction mode.';
+      errors.interactionType = createMessageDescriptor('validation_interactionType_invalid');
     }
 
     if (
       candidateSettings.hoverDelay !== undefined &&
       !Number.isInteger(candidateSettings.hoverDelay)
     ) {
-      errors.hoverDelay = `Enter a whole number from ${HOVER_DELAY_MIN} to ${HOVER_DELAY_MAX}.`;
+      errors.hoverDelay = createMessageDescriptor('validation_hoverDelay_range', [HOVER_DELAY_MIN, HOVER_DELAY_MAX]);
     } else if (
       candidateSettings.hoverDelay !== undefined &&
       (candidateSettings.hoverDelay < HOVER_DELAY_MIN || candidateSettings.hoverDelay > HOVER_DELAY_MAX)
     ) {
-      errors.hoverDelay = `Enter a whole number from ${HOVER_DELAY_MIN} to ${HOVER_DELAY_MAX}.`;
+      errors.hoverDelay = createMessageDescriptor('validation_hoverDelay_range', [HOVER_DELAY_MIN, HOVER_DELAY_MAX]);
     }
 
     if (
       candidateSettings.maxPopups !== undefined &&
       (!Number.isInteger(candidateSettings.maxPopups) || candidateSettings.maxPopups < MAX_POPUPS_MIN)
     ) {
-      errors.maxPopups = `Enter a whole number of at least ${MAX_POPUPS_MIN}.`;
+      errors.maxPopups = createMessageDescriptor('validation_maxPopups_min', [MAX_POPUPS_MIN]);
     }
 
     if (
       candidateSettings.popupSizeUnit !== undefined &&
       !isValidPopupSizeUnit(candidateSettings.popupSizeUnit)
     ) {
-      errors.popupSizeUnit = 'Choose percent or pixels.';
+      errors.popupSizeUnit = createMessageDescriptor('validation_popupSizeUnit_invalid');
     }
 
     const popupSizeUnit = isValidPopupSizeUnit(candidateSettings.popupSizeUnit)
@@ -169,8 +188,8 @@
       !isValidPopupSizeValue(popupSizeUnit, 'width', candidateSettings.popupWidth)
     ) {
       errors.popupWidth = popupSizeUnit === 'px'
-        ? `Minimum width is ${POPUP_MIN_WIDTH}px.`
-        : `Enter a value from ${POPUP_PERCENT_MIN} to ${POPUP_PERCENT_MAX}.`;
+        ? createMessageDescriptor('validation_popupWidth_min_px', [POPUP_MIN_WIDTH])
+        : createMessageDescriptor('validation_popupWidth_range_percent', [POPUP_PERCENT_MIN, POPUP_PERCENT_MAX]);
     }
 
     if (
@@ -178,33 +197,37 @@
       !isValidPopupSizeValue(popupSizeUnit, 'height', candidateSettings.popupHeight)
     ) {
       errors.popupHeight = popupSizeUnit === 'px'
-        ? `Minimum height is ${POPUP_MIN_HEIGHT}px.`
-        : `Enter a value from ${POPUP_PERCENT_MIN} to ${POPUP_PERCENT_MAX}.`;
+        ? createMessageDescriptor('validation_popupHeight_min_px', [POPUP_MIN_HEIGHT])
+        : createMessageDescriptor('validation_popupHeight_range_percent', [POPUP_PERCENT_MIN, POPUP_PERCENT_MAX]);
     }
 
     if (
       candidateSettings.themeMode !== undefined &&
       !THEME_MODES.includes(candidateSettings.themeMode)
     ) {
-      errors.themeMode = 'Choose Light, Dark, or Auto (System).';
+      errors.themeMode = createMessageDescriptor('validation_themeMode_invalid');
     }
 
     return errors;
   }
 
-  function formatTriggerKeyLabel(code) {
-    if (!code) return 'No key set';
-    if (TRIGGER_KEY_LABELS[code]) return TRIGGER_KEY_LABELS[code];
-    if (code.startsWith('Key')) return code.slice(3).toUpperCase();
-    if (code.startsWith('Digit')) return code.slice(5);
-    return code
-      .replace(/([a-z0-9])([A-Z])/g, '$1 $2')
-      .replace(/^(.)/, (match) => match.toUpperCase());
+  function getTriggerKeyLabelDescriptor(code) {
+    if (!code) return createMessageDescriptor('triggerKey_none');
+    if (TRIGGER_KEY_MESSAGE_KEYS[code]) {
+      return createMessageDescriptor(TRIGGER_KEY_MESSAGE_KEYS[code]);
+    }
+    if (code.startsWith('Key')) return { text: code.slice(3).toUpperCase() };
+    if (code.startsWith('Digit')) return { text: code.slice(5) };
+    return {
+      text: code
+        .replace(/([a-z0-9])([A-Z])/g, '$1 $2')
+        .replace(/^(.)/, (match) => match.toUpperCase())
+    };
   }
 
-  function getTriggerKeyButtonLabel(code, isCapturing) {
-    if (isCapturing) return 'Press a key...';
-    return code ? 'Change key' : 'Set key';
+  function getTriggerKeyButtonLabelDescriptor(code, isCapturing) {
+    if (isCapturing) return createMessageDescriptor('triggerKey_button_capturing');
+    return createMessageDescriptor(code ? 'triggerKey_button_change' : 'triggerKey_button_set');
   }
 
   function createTriggerKeyCaptureController(options = {}) {
@@ -459,13 +482,15 @@
     DEFAULT_POPUP_SIZE_UNIT,
     PREVIEW_SIZE_UNIT_DEFAULTS,
     THEME_MODES,
+    LANGUAGE_SETTINGS,
     cloneDefaultSettings,
     normalizeSettings,
     normalizeInteractionType,
     normalizeTriggerKey,
     normalizeThemeMode,
-    formatTriggerKeyLabel,
-    getTriggerKeyButtonLabel,
+    normalizeLanguageSetting,
+    getTriggerKeyLabelDescriptor,
+    getTriggerKeyButtonLabelDescriptor,
     createTriggerKeyCaptureController,
     getValidationErrors,
     readSettings,

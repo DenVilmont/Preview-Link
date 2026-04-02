@@ -1,0 +1,356 @@
+{
+  "manifest_name": {
+    "message": "Preview Link"
+  },
+  "manifest_description": {
+    "message": "无需新标签页：悬停即可即时预览任意链接内容，无需打开额外标签页。"
+  },
+  "manifest_actionTitle": {
+    "message": "Preview Link"
+  },
+  "common_appName": {
+    "message": "Preview Link"
+  },
+  "common_enabled": {
+    "message": "启用"
+  },
+  "common_active": {
+    "message": "已启用"
+  },
+  "common_mode": {
+    "message": "模式"
+  },
+  "common_language": {
+    "message": "语言"
+  },
+  "common_millisecondsValue": {
+    "message": "$1 毫秒"
+  },
+  "popup_documentTitle": {
+    "message": "Preview Link"
+  },
+  "popup_subtitle": {
+    "message": "快速设置"
+  },
+  "popup_interaction_title": {
+    "message": "预览打开方式"
+  },
+  "popup_interaction_description": {
+    "message": "选择在悬停时打开预览，或在按下按键时打开预览。"
+  },
+  "popup_openSettings": {
+    "message": "打开设置"
+  },
+  "settings_documentTitle": {
+    "message": "Preview Link 设置"
+  },
+  "settings_header_title": {
+    "message": "Preview Link 设置"
+  },
+  "settings_header_intro": {
+    "message": "更改会自动保存。"
+  },
+  "settings_tabs_ariaLabel": {
+    "message": "设置分区"
+  },
+  "settings_tabs_general": {
+    "message": "常规"
+  },
+  "settings_tabs_previewBehavior": {
+    "message": "预览行为"
+  },
+  "settings_tabs_features": {
+    "message": "功能"
+  },
+  "settings_tabs_compatibility": {
+    "message": "兼容性"
+  },
+  "settings_tabs_appearanceLanguage": {
+    "message": "外观与语言"
+  },
+  "settings_tabs_actions": {
+    "message": "操作"
+  },
+  "settings_general_title": {
+    "message": "常规"
+  },
+  "settings_enabled_title": {
+    "message": "启用"
+  },
+  "settings_enabled_description": {
+    "message": "开启或关闭 Preview Link。"
+  },
+  "settings_interaction_title": {
+    "message": "预览打开方式"
+  },
+  "settings_interaction_description": {
+    "message": "选择在悬停时打开预览，或在按下按键时打开预览。"
+  },
+  "settings_hoverDelay_title": {
+    "message": "悬停延迟"
+  },
+  "settings_hoverDelay_description": {
+    "message": "打开预览前等待的时间。"
+  },
+  "settings_hoverDelay_range": {
+    "message": "$1-$2 毫秒"
+  },
+  "settings_triggerKey_title": {
+    "message": "触发按键"
+  },
+  "settings_previewBehavior_title": {
+    "message": "预览行为"
+  },
+  "settings_previewSize_title": {
+    "message": "预览默认尺寸"
+  },
+  "settings_previewSize_description": {
+    "message": "切换单位时，宽度和高度会重置为该单位的默认值。"
+  },
+  "settings_previewSize_percent": {
+    "message": "百分比"
+  },
+  "settings_previewSize_pixels": {
+    "message": "像素"
+  },
+  "settings_previewSize_width": {
+    "message": "宽度"
+  },
+  "settings_previewSize_height": {
+    "message": "高度"
+  },
+  "settings_previewSize_helper_percent": {
+    "message": "允许范围：$1-$2%"
+  },
+  "settings_previewSize_helper_px": {
+    "message": "最小值：宽度 $1px，高度 $2px"
+  },
+  "settings_maxPopups_title": {
+    "message": "最大打开预览数"
+  },
+  "settings_maxPopups_minimum": {
+    "message": "最小值 $1"
+  },
+  "settings_features_title": {
+    "message": "功能"
+  },
+  "settings_readerMode_title": {
+    "message": "阅读模式建议"
+  },
+  "settings_readerMode_description": {
+    "message": "在适合的页面上建议使用更清爽的阅读视图。"
+  },
+  "settings_videoMode_title": {
+    "message": "视频模式"
+  },
+  "settings_videoMode_description": {
+    "message": "保持适合视频的预览行为。"
+  },
+  "settings_compatibility_title": {
+    "message": "兼容性"
+  },
+  "settings_compatibility_intro": {
+    "message": "只有在网站出现问题时才修改这里。"
+  },
+  "settings_aggressiveCompatibility_title": {
+    "message": "激进兼容模式"
+  },
+  "settings_aggressiveCompatibility_description": {
+    "message": "为在预览中表现不佳的网站使用更强的后备方案。"
+  },
+  "settings_aggressiveCompatibility_warning": {
+    "message": "警告：此模式可能会破坏网站，并削弱部分限制。除非你正在排查特定兼容性问题，否则请保持关闭。"
+  },
+  "settings_appearance_title": {
+    "message": "外观与语言"
+  },
+  "settings_theme_title": {
+    "message": "主题"
+  },
+  "settings_theme_light": {
+    "message": "浅色"
+  },
+  "settings_theme_dark": {
+    "message": "深色"
+  },
+  "settings_theme_auto": {
+    "message": "Auto (System)"
+  },
+  "settings_language_title": {
+    "message": "语言"
+  },
+  "settings_language_option_auto": {
+    "message": "Auto (System)"
+  },
+  "settings_language_option_en": {
+    "message": "English"
+  },
+  "settings_language_option_ru": {
+    "message": "Русский"
+  },
+  "settings_language_option_es": {
+    "message": "Español"
+  },
+  "settings_language_option_zh_CN": {
+    "message": "简体中文"
+  },
+  "settings_actions_title": {
+    "message": "操作"
+  },
+  "settings_reset_description": {
+    "message": "将所有设置恢复为默认值。"
+  },
+  "settings_reset_button": {
+    "message": "重置"
+  },
+  "settings_status_reset": {
+    "message": "设置已恢复为默认值。"
+  },
+  "interaction_hover": {
+    "message": "仅悬停"
+  },
+  "interaction_hoverWithKey": {
+    "message": "悬停 + 按键"
+  },
+  "a11y_interactionMode": {
+    "message": "交互模式"
+  },
+  "preview_openInNewTab": {
+    "message": "在新标签页中打开预览"
+  },
+  "preview_reload": {
+    "message": "重新加载预览"
+  },
+  "preview_close": {
+    "message": "关闭预览"
+  },
+  "preview_closeAll": {
+    "message": "全部关闭"
+  },
+  "preview_closeAllAriaLabel": {
+    "message": "关闭此页面上的所有预览弹窗"
+  },
+  "fallback_openInNewTab": {
+    "message": "在新标签页中打开"
+  },
+  "fallback_copyLink": {
+    "message": "复制链接"
+  },
+  "fallback_copySuccess": {
+    "message": "已复制"
+  },
+  "fallback_copyFailed": {
+    "message": "复制失败"
+  },
+  "fallback_blocked": {
+    "message": "此页面无法在嵌入式预览中显示。"
+  },
+  "fallback_loadFailed": {
+    "message": "预览加载失败。请尝试在新标签页中打开该页面。"
+  },
+  "notice_previewLimitReached": {
+    "message": "已达到预览数量上限（$1）。请关闭一个现有预览后再打开新的预览。"
+  },
+  "validation_interactionType_invalid": {
+    "message": "请选择有效的交互模式。"
+  },
+  "validation_hoverDelay_range": {
+    "message": "请输入 $1 到 $2 之间的整数。"
+  },
+  "validation_maxPopups_min": {
+    "message": "请输入不小于 $1 的整数。"
+  },
+  "validation_popupSizeUnit_invalid": {
+    "message": "请选择百分比或像素。"
+  },
+  "validation_popupWidth_min_px": {
+    "message": "最小宽度为 $1px。"
+  },
+  "validation_popupWidth_range_percent": {
+    "message": "请输入 $1 到 $2 之间的值。"
+  },
+  "validation_popupHeight_min_px": {
+    "message": "最小高度为 $1px。"
+  },
+  "validation_popupHeight_range_percent": {
+    "message": "请输入 $1 到 $2 之间的值。"
+  },
+  "validation_themeMode_invalid": {
+    "message": "请选择浅色、深色或 Auto (System)。"
+  },
+  "triggerKey_none": {
+    "message": "未设置按键"
+  },
+  "triggerKey_button_set": {
+    "message": "设置按键"
+  },
+  "triggerKey_button_change": {
+    "message": "更改按键"
+  },
+  "triggerKey_button_capturing": {
+    "message": "请按下一个按键..."
+  },
+  "triggerKey_key_backquote": {
+    "message": "Backquote (`)"
+  },
+  "triggerKey_key_arrowLeft": {
+    "message": "左箭头"
+  },
+  "triggerKey_key_arrowRight": {
+    "message": "右箭头"
+  },
+  "triggerKey_key_arrowUp": {
+    "message": "上箭头"
+  },
+  "triggerKey_key_arrowDown": {
+    "message": "下箭头"
+  },
+  "triggerKey_key_escape": {
+    "message": "Esc"
+  },
+  "triggerKey_key_space": {
+    "message": "空格"
+  },
+  "triggerKey_key_enter": {
+    "message": "Enter"
+  },
+  "triggerKey_key_tab": {
+    "message": "Tab"
+  },
+  "triggerKey_key_backspace": {
+    "message": "Backspace"
+  },
+  "triggerKey_key_shift": {
+    "message": "Shift"
+  },
+  "triggerKey_key_control": {
+    "message": "Ctrl"
+  },
+  "triggerKey_key_alt": {
+    "message": "Alt"
+  },
+  "triggerKey_key_meta": {
+    "message": "Meta"
+  },
+  "triggerKey_key_insert": {
+    "message": "Insert"
+  },
+  "triggerKey_key_delete": {
+    "message": "Delete"
+  },
+  "triggerKey_key_home": {
+    "message": "Home"
+  },
+  "triggerKey_key_end": {
+    "message": "End"
+  },
+  "triggerKey_key_pageUp": {
+    "message": "Page Up"
+  },
+  "triggerKey_key_pageDown": {
+    "message": "Page Down"
+  },
+  "triggerKey_key_capsLock": {
+    "message": "Caps Lock"
+  }
+}
