@@ -1,6 +1,15 @@
 // content.js
 let popups = [];
-const { readSettings, isSettingsChange, DEFAULT_SETTINGS } = globalThis.PreviewSettings;
+const {
+  readSettings,
+  isSettingsChange,
+  DEFAULT_SETTINGS
+} = globalThis.PreviewSettings;
+const {
+  applyThemeMarker,
+  buildThemeTokenCss,
+  subscribeToSystemThemeChange
+} = globalThis.PreviewTheme;
 let MAX_POPUPS = DEFAULT_SETTINGS.maxPopups;
 let popupIdCounter = 0;
 // Hover delay before opening popup (ms)
@@ -10,6 +19,7 @@ let hoverDelay = DEFAULT_SETTINGS.hoverDelay;
 let enabled = DEFAULT_SETTINGS.enabled;
 let interactionType = DEFAULT_SETTINGS.interactionType;
 let triggerKey = DEFAULT_SETTINGS.triggerKey;
+let currentThemeMode = DEFAULT_SETTINGS.themeMode;
 let listenersAttached = false;
 const DEBUG_PREVIEW = false;
 const ORIGINAL_LIVENESS_GRACE_MS = 1000;
@@ -58,6 +68,10 @@ function logPreviewDebug(event, details) {
   console.debug('[link-preview]', event, details);
 }
 
+function ownsVisibleThemeSurfaces() {
+  return runtimeContext.isTopWindow && !runtimeContext.isPreviewPopupRuntime;
+}
+
 function applyStoredSettings(settings) {
   enabled = settings.enabled;
   MAX_POPUPS = settings.maxPopups;
@@ -65,6 +79,7 @@ function applyStoredSettings(settings) {
   interactionType = settings.interactionType;
   triggerKey = settings.triggerKey;
   popupSizeSettings = normalizePreviewSizeSettings(settings);
+  currentThemeMode = settings.themeMode;
 }
 
 function getInitialPopupSize(settings) {
@@ -85,10 +100,21 @@ function getInitialPopupSize(settings) {
 // Load initial settings
 readSettings().then((settings) => {
   applyStoredSettings(settings);
+  if (ownsVisibleThemeSurfaces()) {
+    applyThemeToMountedSurfaces();
+  }
 
   // Attach listeners if extension is enabled
   if (enabled && !runtimeContext.isPreviewPopupRuntime) attachListeners();
 });
+
+const unsubscribeSystemThemeChange = ownsVisibleThemeSurfaces()
+  ? subscribeToSystemThemeChange(() => {
+      if (currentThemeMode !== 'auto') return;
+      applyThemeToMountedSurfaces();
+    })
+  : () => {};
+window.addEventListener('pagehide', unsubscribeSystemThemeChange, { once: true });
 
 const hoverInteraction = {
   activeLink: null,
@@ -626,6 +652,9 @@ chrome.storage.onChanged.addListener((changes, area) => {
     const previousInteractionType = interactionType;
 
     applyStoredSettings(settings);
+    if (ownsVisibleThemeSurfaces()) {
+      applyThemeToMountedSurfaces();
+    }
 
     if (previousInteractionType !== interactionType) {
       dispatchHoverClear();
@@ -674,42 +703,97 @@ function handlePreviewOpenRequest(msg) {
   });
 }
 
+const CONTENT_THEME_SURFACE_STYLES = `
+${buildThemeTokenCss('.link-preview-theme-surface')}
+
+.link-preview-limit-notice {
+    position: fixed;
+    top: 16px;
+    left: 50%;
+    transform: translateX(-50%);
+    z-index: 2147483647;
+    padding: 8px 12px;
+    border: 1px solid var(--pl-notice-border);
+    border-radius: 8px;
+    background: var(--pl-notice-bg);
+    color: var(--pl-notice-text);
+    box-shadow: 0 4px 16px var(--pl-shadow-overlay);
+    font: 13px/1.2 "Segoe UI", Arial, sans-serif;
+    pointer-events: none;
+    opacity: 0;
+    transition: opacity 0.2s ease;
+}
+`;
+
+function ensureContentThemeSurfaceStyles() {
+    if (!ownsVisibleThemeSurfaces()) return;
+    if (document.getElementById('link-preview-theme-surface-styles')) return;
+    const style = document.createElement('style');
+    style.id = 'link-preview-theme-surface-styles';
+    style.textContent = CONTENT_THEME_SURFACE_STYLES;
+    (document.head || document.documentElement).appendChild(style);
+}
+
+function applyThemeToPopupEntry(popupEntry) {
+    if (!popupEntry || !popupEntry.popup) return;
+    applyThemeMarker(popupEntry.popup, currentThemeMode);
+}
+
+function applyThemeToMountedSurfaces() {
+    if (!ownsVisibleThemeSurfaces()) return;
+    const limitNotice = document.getElementById('link-preview-limit-notice');
+    if (!popups.length && !limitNotice) return;
+    ensureContentThemeSurfaceStyles();
+    popups.forEach((popupEntry) => {
+        applyThemeToPopupEntry(popupEntry);
+    });
+    if (limitNotice) {
+        applyThemeMarker(limitNotice, currentThemeMode);
+    }
+}
+
+function clearLimitNoticeLifecycle(notice) {
+    if (!notice) return;
+    clearTimeout(notice._fadeTimer);
+    clearTimeout(notice._removeTimer);
+    notice._fadeTimer = null;
+    notice._removeTimer = null;
+}
+
+function scheduleLimitNoticeRemoval(notice) {
+    if (!notice) return;
+    clearLimitNoticeLifecycle(notice);
+    notice._fadeTimer = setTimeout(() => {
+        notice.style.opacity = '0';
+        notice._removeTimer = setTimeout(() => {
+            if (notice.parentNode) {
+                notice.remove();
+            }
+        }, 220);
+    }, 1800);
+}
+
 function showLimitReachedNotice() {
+    ensureContentThemeSurfaceStyles();
     const existing = document.getElementById('link-preview-limit-notice');
     if (existing) {
+        existing.textContent = `Preview limit reached (${MAX_POPUPS}). Close an existing preview to open another.`;
+        applyThemeMarker(existing, currentThemeMode);
         existing.style.opacity = '1';
-        clearTimeout(existing._hideTimer);
-        existing._hideTimer = setTimeout(() => {
-            existing.style.opacity = '0';
-        }, 1800);
+        scheduleLimitNoticeRemoval(existing);
         return;
     }
 
     const notice = document.createElement('div');
     notice.id = 'link-preview-limit-notice';
+    notice.className = 'link-preview-theme-surface link-preview-limit-notice';
     notice.textContent = `Preview limit reached (${MAX_POPUPS}). Close an existing preview to open another.`;
-    notice.style.position = 'fixed';
-    notice.style.top = '16px';
-    notice.style.left = '50%';
-    notice.style.transform = 'translateX(-50%)';
-    notice.style.zIndex = '2147483647';
-    notice.style.background = 'rgba(24, 24, 24, 0.92)';
-    notice.style.color = '#fff';
-    notice.style.padding = '8px 12px';
-    notice.style.borderRadius = '8px';
-    notice.style.fontSize = '13px';
-    notice.style.lineHeight = '1.2';
-    notice.style.boxShadow = '0 4px 16px rgba(0, 0, 0, 0.3)';
-    notice.style.pointerEvents = 'none';
-    notice.style.opacity = '0';
-    notice.style.transition = 'opacity 0.2s ease';
+    applyThemeMarker(notice, currentThemeMode);
     document.body.appendChild(notice);
     requestAnimationFrame(() => {
         notice.style.opacity = '1';
     });
-    notice._hideTimer = setTimeout(() => {
-        notice.style.opacity = '0';
-    }, 1800);
+    scheduleLimitNoticeRemoval(notice);
 }
 
 function clamp(value, min, max) {
@@ -722,6 +806,8 @@ const TOP_BAR_PROBE_LEFT_OFFSETS_PX = [16, 56];
 const TOP_BAR_RESCUE_MARGIN_PX = 4;
 const VIEWPORT_HIT_TEST_PADDING_PX = 1;
 const POPUP_CHROME_SHADOW_STYLES = `
+${buildThemeTokenCss(':host')}
+
 :host {
     all: initial;
     position: fixed;
@@ -730,25 +816,24 @@ const POPUP_CHROME_SHADOW_STYLES = `
     min-height: ${POPUP_MIN_HEIGHT}px;
     display: flex;
     flex-direction: column;
-    background: #ffffff;
-    border: 2px solid #4f8cff;
+    background: var(--pl-panel);
+    border: 2px solid var(--pl-accent);
     border-radius: 12px;
-    box-shadow: 0 8px 32px rgba(0, 0, 0, 0.25);
+    box-shadow: 0 8px 32px var(--pl-shadow-overlay);
     overflow: hidden;
     box-sizing: border-box;
     pointer-events: auto;
     opacity: 0;
     transform: scale(1);
     transition: opacity 0.3s, transform 0.3s, border-color 0.2s ease, box-shadow 0.2s ease;
-    color: #0f172a;
-    color-scheme: light;
+    color: var(--pl-text);
     font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
     line-height: 1.4;
 }
 
 :host(.link-preview-popup--attention) {
-    border-color: #ffd24d;
-    box-shadow: 0 0 0 4px rgba(255, 210, 77, 0.55), 0 8px 32px rgba(0, 0, 0, 0.25);
+    border-color: var(--pl-attention-border);
+    box-shadow: 0 0 0 4px var(--pl-attention-ring), 0 8px 32px var(--pl-shadow-overlay);
 }
 
 *, *::before, *::after {
@@ -762,8 +847,8 @@ button {
 .link-preview-topbar {
     position: relative;
     flex: 0 0 32px;
-    background: #eaf2ff;
-    border-bottom: 1px solid #b3d1ff;
+    background: var(--pl-topbar-bg);
+    border-bottom: 1px solid var(--pl-border-strong);
     user-select: none;
     touch-action: none;
     cursor: move;
@@ -779,11 +864,11 @@ button {
     min-height: 24px;
     margin: 0;
     padding: 0 10px;
-    border: 1px solid rgba(79, 140, 255, 0.22);
+    border: 1px solid var(--pl-border);
     border-radius: 999px;
-    background: rgba(255, 255, 255, 0.96);
-    box-shadow: 0 1px 4px rgba(15, 23, 42, 0.08);
-    color: #1d4ed8;
+    background: var(--pl-button-bg);
+    box-shadow: 0 1px 4px var(--pl-shadow-control);
+    color: var(--pl-accent-strong);
     font-size: 12px;
     font-weight: 600;
     line-height: 1;
@@ -794,18 +879,18 @@ button {
 }
 
 .link-preview-topbar-action:hover {
-    background: #dbeafe;
-    border-color: rgba(59, 130, 246, 0.38);
-    color: #1e40af;
+    background: var(--pl-button-bg-hover);
+    border-color: var(--pl-border-strong);
+    color: var(--pl-accent-strong);
 }
 
 .link-preview-topbar-action:focus-visible {
-    outline: 2px solid #2563eb;
+    outline: 2px solid var(--pl-accent);
     outline-offset: 1px;
 }
 
 .link-preview-topbar-action:active {
-    background: #bfdbfe;
+    background: var(--pl-button-bg-active);
 }
 
 .link-preview-topbar-action[hidden] {
@@ -822,7 +907,7 @@ button {
     flex: 1 1 auto;
     min-height: 0;
     overflow: hidden;
-    background: #ffffff;
+    background: var(--pl-preview-canvas);
 }
 
 .link-preview-loading-bar {
@@ -832,7 +917,7 @@ button {
     z-index: 2;
     height: 4px;
     width: 0%;
-    background: linear-gradient(90deg, #4f8cff, #00e0c6);
+    background: linear-gradient(90deg, var(--pl-loading-start), var(--pl-loading-end));
     transition: width 0.2s, opacity 0.5s;
     opacity: 1;
     pointer-events: none;
@@ -843,7 +928,7 @@ button {
     width: 100%;
     height: 100%;
     border: none;
-    background: #f8fafc;
+    background: var(--pl-preview-canvas);
 }
 
 .link-preview-control {
@@ -856,22 +941,22 @@ button {
     justify-content: center;
     margin: 0;
     padding: 0;
-    border: 1px solid rgba(79, 140, 255, 0.18);
+    border: 1px solid var(--pl-border);
     border-radius: 999px;
-    background: rgba(255, 255, 255, 0.96);
-    box-shadow: 0 2px 8px rgba(15, 23, 42, 0.08);
-    color: #1d4ed8;
+    background: var(--pl-button-bg);
+    box-shadow: 0 2px 8px var(--pl-shadow-control);
+    color: var(--pl-accent-strong);
     cursor: pointer;
     appearance: none;
     -webkit-appearance: none;
 }
 
 .link-preview-control:hover {
-    background: #dbeafe;
+    background: var(--pl-button-bg-hover);
 }
 
 .link-preview-control:focus-visible {
-    outline: 2px solid #2563eb;
+    outline: 2px solid var(--pl-accent);
     outline-offset: 1px;
 }
 
@@ -906,7 +991,7 @@ button {
     width: 14px;
     height: 14px;
     border-radius: 4px;
-    background: linear-gradient(135deg, rgba(79, 140, 255, 0.85), rgba(0, 224, 198, 0.85));
+    background: linear-gradient(135deg, var(--pl-resize-start), var(--pl-resize-end));
     touch-action: none;
     cursor: se-resize;
 }
@@ -926,17 +1011,18 @@ button {
     width: 100%;
     height: 100%;
     padding: 14px;
-    background: #f8fafc;
-    color: #1f2937;
+    background: var(--pl-panel-subtle);
+    color: var(--pl-text);
     font-size: 13px;
     line-height: 1.35;
 }
 
 .link-preview-fallback-url {
     padding: 8px;
-    border: 1px solid #d1d5db;
+    border: 1px solid var(--pl-border);
     border-radius: 6px;
-    background: #ffffff;
+    background: var(--pl-input-bg);
+    color: var(--pl-muted);
     word-break: break-all;
 }
 
@@ -949,32 +1035,32 @@ button {
 .link-preview-fallback-action {
     min-height: 32px;
     padding: 0 12px;
-    border: 1px solid #cbd5e1;
+    border: 1px solid var(--pl-border);
     border-radius: 8px;
-    background: #ffffff;
-    color: #0f172a;
+    background: var(--pl-button-bg);
+    color: var(--pl-text);
     cursor: pointer;
     appearance: none;
     -webkit-appearance: none;
 }
 
 .link-preview-fallback-action:hover {
-    background: #f1f5f9;
+    background: var(--pl-button-bg-hover);
 }
 
 .link-preview-fallback-action:focus-visible {
-    outline: 2px solid #2563eb;
+    outline: 2px solid var(--pl-accent);
     outline-offset: 1px;
 }
 
 .link-preview-fallback-action--primary {
-    border-color: #2563eb;
-    background: #2563eb;
+    border-color: var(--pl-accent);
+    background: var(--pl-accent);
     color: #ffffff;
 }
 
 .link-preview-fallback-action--primary:hover {
-    background: #1d4ed8;
+    background: var(--pl-accent-hover);
 }
 `;
 const POPUP_CONTROL_ICON_MARKUP = {
@@ -1460,6 +1546,7 @@ function createPopup(url, x, y, anchorRect, options = {}) {
     popup.style.height = initialSize.height + 'px';
     popup.style.opacity = '0';
     popup.style.transition = 'opacity 0.3s, transform 0.3s, border-color 0.2s ease, box-shadow 0.2s ease';
+    applyThemeMarker(popup, currentThemeMode);
     shadowRoot.appendChild(createPopupShadowStyle());
 
     // Top bar

@@ -21,6 +21,7 @@
   const SETTINGS_MODEL_VERSION = 1;
   const SETTINGS_MODEL_VERSION_KEY = 'settingsModelVersion';
   const INTERACTION_TYPES = Object.freeze(['hover', 'hoverWithKey']);
+  const THEME_MODES = Object.freeze(['light', 'dark', 'auto']);
   const TRIGGER_KEY_LABELS = Object.freeze({
     Backquote: 'Backquote (`)',
     ArrowLeft: 'Left Arrow',
@@ -50,6 +51,7 @@
     'popupSizeUnit',
     'popupWidth',
     'popupHeight',
+    'themeMode',
     'readerModeSuggestions',
     'videoModeEnabled',
     'aggressiveCompatibilityMode'
@@ -65,6 +67,7 @@
     popupSizeUnit: DEFAULT_POPUP_SIZE_UNIT,
     popupWidth: PREVIEW_SIZE_UNIT_DEFAULTS.percent.width,
     popupHeight: PREVIEW_SIZE_UNIT_DEFAULTS.percent.height,
+    themeMode: 'auto',
     readerModeSuggestions: true,
     videoModeEnabled: true,
     aggressiveCompatibilityMode: false
@@ -95,6 +98,10 @@
     return value;
   }
 
+  function normalizeThemeMode(value) {
+    return THEME_MODES.includes(value) ? value : DEFAULT_SETTINGS.themeMode;
+  }
+
   function normalizeSettings(rawSettings = {}) {
     const previewSizeSettings = normalizePreviewSizeSettings(rawSettings);
     const maxPopupsFallback = rawSettings[SETTINGS_MODEL_VERSION_KEY] === SETTINGS_MODEL_VERSION
@@ -109,6 +116,7 @@
       popupSizeUnit: previewSizeSettings.popupSizeUnit,
       popupWidth: previewSizeSettings.popupWidth,
       popupHeight: previewSizeSettings.popupHeight,
+      themeMode: normalizeThemeMode(rawSettings.themeMode),
       readerModeSuggestions: normalizeBoolean(rawSettings.readerModeSuggestions, DEFAULT_SETTINGS.readerModeSuggestions),
       videoModeEnabled: normalizeBoolean(rawSettings.videoModeEnabled, DEFAULT_SETTINGS.videoModeEnabled),
       aggressiveCompatibilityMode: normalizeBoolean(rawSettings.aggressiveCompatibilityMode, DEFAULT_SETTINGS.aggressiveCompatibilityMode)
@@ -172,6 +180,13 @@
       errors.popupHeight = popupSizeUnit === 'px'
         ? `Minimum height is ${POPUP_MIN_HEIGHT}px.`
         : `Enter a value from ${POPUP_PERCENT_MIN} to ${POPUP_PERCENT_MAX}.`;
+    }
+
+    if (
+      candidateSettings.themeMode !== undefined &&
+      !THEME_MODES.includes(candidateSettings.themeMode)
+    ) {
+      errors.themeMode = 'Choose Light, Dark, or Auto (System).';
     }
 
     return errors;
@@ -443,10 +458,12 @@
     POPUP_PERCENT_MAX,
     DEFAULT_POPUP_SIZE_UNIT,
     PREVIEW_SIZE_UNIT_DEFAULTS,
+    THEME_MODES,
     cloneDefaultSettings,
     normalizeSettings,
     normalizeInteractionType,
     normalizeTriggerKey,
+    normalizeThemeMode,
     formatTriggerKeyLabel,
     getTriggerKeyButtonLabel,
     createTriggerKeyCaptureController,

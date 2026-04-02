@@ -3,34 +3,26 @@
 <head>
   <meta charset="UTF-8">
   <title>Preview Link</title>
+  <script
+    src="preview-theme.js"
+    data-apply-document-tokens="true"
+    data-apply-document-foundation="true"
+    data-bootstrap-document-theme="true"></script>
   <script src="preview-size-config.js" defer></script>
   <script src="preview-settings.js" defer></script>
   <script src="popup.js" defer></script>
   <style>
-    :root {
-      --accent: #4f8cff;
-      --border: #d9e3f6;
-      --bg: #fbfcff;
-      --panel: #ffffff;
-      --text: #1f2937;
-      --muted: #5f6c80;
-    }
-
     body {
-      margin: 0;
       padding: 14px;
       width: 260px;
-      font-family: "Segoe UI", Arial, sans-serif;
-      background: var(--bg);
-      color: var(--text);
     }
 
     .card {
-      background: var(--panel);
-      border: 1px solid var(--border);
+      background: var(--pl-panel);
+      border: 1px solid var(--pl-border);
       border-radius: 14px;
       padding: 14px;
-      box-shadow: 0 10px 30px rgba(79, 140, 255, 0.08);
+      box-shadow: 0 10px 30px var(--pl-shadow-card);
     }
 
     h1 {
@@ -41,15 +33,15 @@
 
     .subtitle {
       margin: 0 0 14px;
-      color: var(--muted);
+      color: var(--pl-muted);
       font-size: 12px;
     }
 
     .section {
-      border: 1px solid var(--border);
+      border: 1px solid var(--pl-border);
       border-radius: 12px;
       padding: 12px;
-      background: #fcfdff;
+      background: var(--pl-panel-subtle);
       margin-bottom: 12px;
     }
 
@@ -65,7 +57,7 @@
 
     .section-copy {
       margin: 0 0 10px;
-      color: var(--muted);
+      color: var(--pl-muted);
       font-size: 12px;
     }
 
@@ -97,7 +89,7 @@
     }
 
     .detail {
-      border-top: 1px solid var(--border);
+      border-top: 1px solid var(--pl-border);
       padding-top: 10px;
     }
 
@@ -106,7 +98,7 @@
       margin-bottom: 8px;
       font-size: 12px;
       font-weight: 600;
-      color: var(--muted);
+      color: var(--pl-muted);
     }
 
     .inline-control {
@@ -148,7 +140,7 @@
       position: absolute;
       inset: 0;
       border-radius: 999px;
-      background: #c9d3e8;
+      background: var(--pl-switch-track);
       transition: background 0.2s ease;
     }
 
@@ -160,13 +152,13 @@
       left: 2px;
       top: 2px;
       border-radius: 50%;
-      background: #ffffff;
+      background: var(--pl-button-bg);
       transition: transform 0.2s ease;
-      box-shadow: 0 1px 3px rgba(0, 0, 0, 0.18);
+      box-shadow: 0 1px 3px var(--pl-shadow-control);
     }
 
     .switch input:checked + .slider {
-      background: var(--accent);
+      background: var(--pl-accent);
     }
 
     .switch input:checked + .slider::before {
@@ -175,14 +167,10 @@
 
     input[type="range"] {
       flex: 1;
-      accent-color: var(--accent);
+      accent-color: var(--pl-accent);
     }
 
     button {
-      border: 1px solid var(--border);
-      border-radius: 10px;
-      background: #ffffff;
-      color: var(--text);
       padding: 8px 10px;
       font-size: 13px;
       cursor: pointer;
@@ -191,14 +179,14 @@
     button.primary {
       width: 100%;
       margin-top: 8px;
-      background: var(--accent);
-      border-color: var(--accent);
+      background: var(--pl-accent);
+      border-color: var(--pl-accent);
       color: #ffffff;
       font-weight: 600;
     }
 
     .muted {
-      color: var(--muted);
+      color: var(--pl-muted);
       font-size: 12px;
     }
   </style>

@@ -3,32 +3,21 @@
 <head>
   <meta charset="UTF-8">
   <title>Preview Link Settings</title>
+  <script
+    src="preview-theme.js"
+    data-apply-document-tokens="true"
+    data-apply-document-foundation="true"
+    data-bootstrap-document-theme="true"></script>
   <script src="preview-size-config.js" defer></script>
   <script src="preview-settings.js" defer></script>
   <script src="options.js" defer></script>
   <style>
-    :root {
-      --accent: #4f8cff;
-      --accent-soft: #eef4ff;
-      --bg: #f6f8fc;
-      --panel: #ffffff;
-      --border: #d8e1f0;
-      --text: #1f2937;
-      --muted: #5f6c80;
-      --warning-bg: #fff5ea;
-      --warning-border: #f4b266;
-      --danger: #b63b23;
-    }
-
     * {
       box-sizing: border-box;
     }
 
     body {
-      margin: 0;
-      font-family: "Segoe UI", Arial, sans-serif;
-      background: var(--bg);
-      color: var(--text);
+      min-height: 100vh;
     }
 
     .page {
@@ -49,7 +38,7 @@
 
     .header p {
       margin: 0;
-      color: var(--muted);
+      color: var(--pl-muted);
       font-size: 14px;
     }
 
@@ -62,11 +51,11 @@
       min-width: 260px;
       max-width: min(440px, calc(100vw - 32px));
       padding: 12px 16px;
-      border: 1px solid #bcd1f7;
-      background: #eef4ff;
-      color: #214b96;
+      border: 1px solid var(--pl-notice-border);
+      background: var(--pl-notice-bg);
+      color: var(--pl-notice-text);
       border-radius: 14px;
-      box-shadow: 0 14px 32px rgba(42, 83, 144, 0.16);
+      box-shadow: 0 14px 32px var(--pl-shadow-overlay);
       font-size: 13px;
       text-align: center;
       pointer-events: none;
@@ -80,9 +69,9 @@
     }
 
     .tab {
-      border: 1px solid var(--border);
-      background: #ffffff;
-      color: var(--text);
+      border: 1px solid var(--pl-border);
+      background: var(--pl-button-bg);
+      color: var(--pl-text);
       border-radius: 999px;
       padding: 9px 14px;
       font-size: 14px;
@@ -90,18 +79,18 @@
     }
 
     .tab-active {
-      background: var(--accent-soft);
-      border-color: var(--accent);
-      color: var(--accent);
+      background: var(--pl-accent-soft);
+      border-color: var(--pl-accent);
+      color: var(--pl-accent);
       font-weight: 600;
     }
 
     .panel {
-      background: var(--panel);
-      border: 1px solid var(--border);
+      background: var(--pl-panel);
+      border: 1px solid var(--pl-border);
       border-radius: 18px;
       padding: 22px;
-      box-shadow: 0 14px 32px rgba(42, 83, 144, 0.08);
+      box-shadow: 0 14px 32px var(--pl-shadow-card);
     }
 
     .panel h2 {
@@ -111,7 +100,7 @@
 
     .panel-intro {
       margin: 0 0 18px;
-      color: var(--muted);
+      color: var(--pl-muted);
       font-size: 14px;
     }
 
@@ -121,10 +110,10 @@
     }
 
     .setting {
-      border: 1px solid var(--border);
+      border: 1px solid var(--pl-border);
       border-radius: 14px;
       padding: 14px 16px;
-      background: #fcfdff;
+      background: var(--pl-panel-subtle);
     }
 
     .setting-header {
@@ -142,7 +131,7 @@
 
     .setting-copy {
       margin: 0;
-      color: var(--muted);
+      color: var(--pl-muted);
       font-size: 13px;
     }
 
@@ -166,7 +155,7 @@
       gap: 14px;
       margin-top: 14px;
       padding-top: 14px;
-      border-top: 1px solid var(--border);
+      border-top: 1px solid var(--pl-border);
     }
 
     .interaction-detail-title {
@@ -191,51 +180,55 @@
       font-size: 14px;
     }
 
-    input[type="number"] {
+    input[type="number"],
+    select {
       width: 120px;
       padding: 8px 10px;
-      border: 1px solid var(--border);
+      border: 1px solid var(--pl-border);
       border-radius: 10px;
       font-size: 14px;
+      background: var(--pl-input-bg);
+      color: var(--pl-text);
+    }
+
+    select {
+      width: auto;
+      min-width: 180px;
     }
 
     .field-error {
       min-height: 16px;
       margin-top: 6px;
-      color: var(--danger);
+      color: var(--pl-danger);
       font-size: 12px;
     }
 
     .helper {
       margin: 8px 0 0;
-      color: var(--muted);
+      color: var(--pl-muted);
       font-size: 12px;
     }
 
     .warning {
       margin-top: 12px;
       padding: 12px 14px;
-      border: 1px solid var(--warning-border);
-      background: var(--warning-bg);
-      color: #714318;
+      border: 1px solid var(--pl-warning-border);
+      background: var(--pl-warning-bg);
+      color: var(--pl-warning-text);
       border-radius: 12px;
       font-size: 13px;
       line-height: 1.45;
     }
 
     button.action {
-      border: 1px solid var(--border);
-      background: #ffffff;
-      color: var(--text);
-      border-radius: 10px;
       padding: 9px 14px;
       font-size: 14px;
       cursor: pointer;
     }
 
     button.danger {
-      border-color: #edc0b7;
-      color: var(--danger);
+      border-color: var(--pl-danger-border);
+      color: var(--pl-danger);
       font-weight: 600;
     }
 
@@ -413,11 +406,21 @@
 
     <section class="panel" id="panel-appearance-language" data-tab-panel="appearance-language" role="tabpanel" aria-labelledby="tab-appearance-language" aria-hidden="true" tabindex="-1" hidden>
       <h2>Appearance &amp; language</h2>
-      <p class="panel-intro">Appearance and language options will show up here when they are ready.</p>
+      <p class="panel-intro">Choose how extension-owned surfaces should look.</p>
       <div class="section-grid">
         <div class="setting">
-          <p class="setting-title">More options later</p>
-          <p class="setting-copy">Nothing to change here yet.</p>
+          <p class="setting-title">Theme</p>
+          <p class="setting-copy">Apply Light, Dark, or follow the current system preference.</p>
+          <div class="inline-inputs">
+            <label class="option" for="setting-theme-mode">
+              <span>Mode</span>
+            </label>
+            <select id="setting-theme-mode">
+              <option value="light">Light</option>
+              <option value="dark">Dark</option>
+              <option value="auto">Auto (System)</option>
+            </select>
+          </div>
         </div>
       </div>
     </section>

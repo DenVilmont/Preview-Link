@@ -18,7 +18,7 @@
    },
    "content_scripts": [ {
       "all_frames": true,
-      "js": [ "preview-size-config.js", "preview-settings.js", "preview-runtime-contract.js", "content.js", "iframe-handler.js" ],
+      "js": [ "preview-size-config.js", "preview-theme.js", "preview-settings.js", "preview-runtime-contract.js", "content.js", "iframe-handler.js" ],
       "matches": [ "\u003Call_urls>" ]
    } ],
    "description": "Without Tabs: preview any link's content instantly on hover—no extra tabs needed.",

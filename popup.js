@@ -10,6 +10,11 @@ document.addEventListener('DOMContentLoaded', async () => {
     HOVER_DELAY_MAX,
     HOVER_DELAY_STEP
   } = globalThis.PreviewSettings;
+  const {
+    applyThemeMarker,
+    applyColorScheme,
+    subscribeToSystemThemeChange
+  } = globalThis.PreviewTheme;
 
   const toggle = document.getElementById('toggle-enabled');
   const interactionHover = document.getElementById('interaction-hover');
@@ -26,6 +31,11 @@ document.addEventListener('DOMContentLoaded', async () => {
   delaySlider.max = String(HOVER_DELAY_MAX);
   delaySlider.step = String(HOVER_DELAY_STEP);
   let currentSettings = await readSettings();
+
+  function applyTheme(settings) {
+    const resolvedTheme = applyThemeMarker(document.documentElement, settings.themeMode);
+    applyColorScheme(document.documentElement, resolvedTheme);
+  }
 
   const triggerKeyCapture = createTriggerKeyCaptureController({
     eventTarget: document,
@@ -54,11 +64,17 @@ document.addEventListener('DOMContentLoaded', async () => {
     setKeyBtn.textContent = getTriggerKeyButtonLabel(settings.triggerKey, triggerKeyCapture.isCapturing());
     delayRow.hidden = settings.interactionType !== 'hover';
     keyRow.hidden = settings.interactionType !== 'hoverWithKey';
+    applyTheme(settings);
   }
 
   render(currentSettings);
   const unsubscribe = subscribe(render);
+  const unsubscribeSystemTheme = subscribeToSystemThemeChange(() => {
+    if (currentSettings.themeMode !== 'auto') return;
+    applyTheme(currentSettings);
+  });
   window.addEventListener('unload', unsubscribe, { once: true });
+  window.addEventListener('unload', unsubscribeSystemTheme, { once: true });
   window.addEventListener('unload', () => {
     triggerKeyCapture.stopCapture();
   }, { once: true });

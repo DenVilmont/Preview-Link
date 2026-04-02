@@ -18,6 +18,11 @@ document.addEventListener('DOMContentLoaded', async () => {
     POPUP_PERCENT_MAX,
     PREVIEW_SIZE_UNIT_DEFAULTS
   } = globalThis.PreviewSettings;
+  const {
+    applyThemeMarker,
+    applyColorScheme,
+    subscribeToSystemThemeChange
+  } = globalThis.PreviewTheme;
 
   const tabButtons = Array.from(document.querySelectorAll('[data-tab-target]'));
   const tabPanels = Array.from(document.querySelectorAll('[data-tab-panel]'));
@@ -42,6 +47,7 @@ document.addEventListener('DOMContentLoaded', async () => {
     popupHeight: document.getElementById('setting-popup-height'),
     popupHeightError: document.getElementById('setting-popup-height-error'),
     popupSizeHelper: document.getElementById('setting-popup-size-helper'),
+    themeMode: document.getElementById('setting-theme-mode'),
     readerModeSuggestions: document.getElementById('setting-reader-mode-suggestions'),
     videoModeEnabled: document.getElementById('setting-video-mode-enabled'),
     aggressiveCompatibilityMode: document.getElementById('setting-aggressive-compatibility-mode'),
@@ -130,6 +136,7 @@ document.addEventListener('DOMContentLoaded', async () => {
     form.popupSizeUnitPx.checked = settings.popupSizeUnit === 'px';
     form.popupWidth.value = String(settings.popupWidth);
     form.popupHeight.value = String(settings.popupHeight);
+    form.themeMode.value = settings.themeMode;
     form.readerModeSuggestions.checked = settings.readerModeSuggestions;
     form.videoModeEnabled.checked = settings.videoModeEnabled;
     form.aggressiveCompatibilityMode.checked = settings.aggressiveCompatibilityMode;
@@ -139,6 +146,12 @@ document.addEventListener('DOMContentLoaded', async () => {
     renderFieldError(form.maxPopupsError, '');
     renderFieldError(form.popupWidthError, '');
     renderFieldError(form.popupHeightError, '');
+    applyTheme(settings);
+  }
+
+  function applyTheme(settings) {
+    const resolvedTheme = applyThemeMarker(document.documentElement, settings.themeMode);
+    applyColorScheme(document.documentElement, resolvedTheme);
   }
 
   async function savePatch(patch) {
@@ -174,7 +187,12 @@ document.addEventListener('DOMContentLoaded', async () => {
   render(currentSettings);
   setActiveTab('general');
   const unsubscribe = subscribe(render);
+  const unsubscribeSystemTheme = subscribeToSystemThemeChange(() => {
+    if (currentSettings.themeMode !== 'auto') return;
+    applyTheme(currentSettings);
+  });
   window.addEventListener('unload', unsubscribe, { once: true });
+  window.addEventListener('unload', unsubscribeSystemTheme, { once: true });
   window.addEventListener('unload', () => {
     triggerKeyCapture.stopCapture();
     if (statusTimeoutId) {
@@ -288,6 +306,10 @@ document.addEventListener('DOMContentLoaded', async () => {
       return;
     }
     await savePatch({ popupSizeUnit, popupHeight });
+  });
+
+  form.themeMode.addEventListener('change', async () => {
+    await savePatch({ themeMode: form.themeMode.value });
   });
 
   form.readerModeSuggestions.addEventListener('change', async () => {
