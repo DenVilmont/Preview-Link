@@ -38,5 +38,5 @@
    "manifest_version": 3,
    "name": "__MSG_manifest_name__",
    "permissions": [ "storage" ],
-   "version": "1.0.4.4"
+   "version": "1.0.4.5"
 }

@@ -3,7 +3,7 @@
     "message": "Preview Link"
   },
   "manifest_description": {
-    "message": "Without tabs: preview any link's content instantly on hover, without opening extra tabs."
+    "message": "Preview links without leaving the page—live previews, fewer tabs, and hover or key-triggered opening."
   },
   "manifest_actionTitle": {
     "message": "Preview Link"

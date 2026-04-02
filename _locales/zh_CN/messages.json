@@ -3,7 +3,7 @@
     "message": "Preview Link"
   },
   "manifest_description": {
-    "message": "无需新标签页：悬停即可即时预览任意链接内容，无需打开额外标签页。"
+    "message": "无需离开当前页面即可预览链接：实时预览、更少标签页，支持悬停或按键触发。"
   },
   "manifest_actionTitle": {
     "message": "Preview Link"

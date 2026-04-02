@@ -3,7 +3,7 @@
     "message": "Preview Link"
   },
   "manifest_description": {
-    "message": "Sin pestañas: previsualiza al instante el contenido de cualquier enlace al pasar el cursor, sin abrir pestañas extra."
+    "message": "Previsualiza enlaces sin salir de la página: vista previa en vivo, menos pestañas y apertura al pasar o con tecla."
   },
   "manifest_actionTitle": {
     "message": "Preview Link"
