@@ -230,6 +230,21 @@
   "preview_closeAllAriaLabel": {
     "message": "Close all preview popups on this page"
   },
+  "preview_readerSuggestion": {
+    "message": "Reader mode is available for this page."
+  },
+  "preview_openReaderMode": {
+    "message": "Open reader mode"
+  },
+  "preview_dismissReaderSuggestion": {
+    "message": "Dismiss reader mode suggestion"
+  },
+  "preview_backToLivePreview": {
+    "message": "Back to live preview"
+  },
+  "preview_readerModeFailed": {
+    "message": "Reader mode could not be opened for this page."
+  },
   "fallback_openInNewTab": {
     "message": "Open in new tab"
   },

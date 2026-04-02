@@ -230,6 +230,21 @@
   "preview_closeAllAriaLabel": {
     "message": "Закрыть все всплывающие превью на этой странице"
   },
+  "preview_readerSuggestion": {
+    "message": "Для этой страницы доступен режим чтения."
+  },
+  "preview_openReaderMode": {
+    "message": "Открыть режим чтения"
+  },
+  "preview_dismissReaderSuggestion": {
+    "message": "Скрыть подсказку о режиме чтения"
+  },
+  "preview_backToLivePreview": {
+    "message": "Вернуться к живому предпросмотру"
+  },
+  "preview_readerModeFailed": {
+    "message": "Не удалось открыть режим чтения для этой страницы."
+  },
   "fallback_openInNewTab": {
     "message": "Открыть в новой вкладке"
   },

@@ -9,7 +9,10 @@
   const POPUP_RUNTIME_ACTIONS = Object.freeze({
     BRING_TO_FRONT: 'bringToFront',
     UPDATE_URL: 'updatePopupUrl',
-    FRAME_ALIVE: 'previewFrameAlive'
+    FRAME_ALIVE: 'previewFrameAlive',
+    REPORT_READERABILITY: 'reportReaderability',
+    REQUEST_READER_MODE: 'requestReaderMode',
+    READER_MODE_RESULT: 'readerModeResult'
   });
 
   function parsePreviewPopupBindingFromWindowName(windowName = window.name) {

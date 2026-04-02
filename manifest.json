@@ -23,7 +23,7 @@
    } ],
    "content_scripts": [ {
       "all_frames": true,
-      "js": [ "preview-size-config.js", "preview-theme.js", "preview-settings.js", "preview-i18n.js", "preview-runtime-contract.js", "content.js", "iframe-handler.js" ],
+      "js": [ "preview-size-config.js", "preview-theme.js", "preview-settings.js", "preview-i18n.js", "preview-runtime-contract.js", "preview-navigation.js", "vendor/readability/readability-readerable.js", "vendor/readability/readability.js", "content-reader-mode.js", "content.js", "iframe-handler.js" ],
       "matches": [ "\u003Call_urls>" ]
    } ],
    "description": "__MSG_manifest_description__",
@@ -38,5 +38,5 @@
    "manifest_version": 3,
    "name": "__MSG_manifest_name__",
    "permissions": [ "storage" ],
-   "version": "1.0.4.3"
+   "version": "1.0.4.4"
 }

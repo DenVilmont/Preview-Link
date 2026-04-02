@@ -230,6 +230,21 @@
   "preview_closeAllAriaLabel": {
     "message": "关闭此页面上的所有预览弹窗"
   },
+  "preview_readerSuggestion": {
+    "message": "此页面可使用阅读模式。"
+  },
+  "preview_openReaderMode": {
+    "message": "打开阅读模式"
+  },
+  "preview_dismissReaderSuggestion": {
+    "message": "关闭阅读模式建议"
+  },
+  "preview_backToLivePreview": {
+    "message": "返回实时预览"
+  },
+  "preview_readerModeFailed": {
+    "message": "无法为此页面打开阅读模式。"
+  },
   "fallback_openInNewTab": {
     "message": "在新标签页中打开"
   },

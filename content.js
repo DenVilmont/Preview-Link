@@ -22,6 +22,7 @@ let hoverDelay = DEFAULT_SETTINGS.hoverDelay;
 let enabled = DEFAULT_SETTINGS.enabled;
 let interactionType = DEFAULT_SETTINGS.interactionType;
 let triggerKey = DEFAULT_SETTINGS.triggerKey;
+let readerModeSuggestionsEnabled = DEFAULT_SETTINGS.readerModeSuggestions;
 let currentThemeMode = DEFAULT_SETTINGS.themeMode;
 let currentI18n = getUiI18n
   ? globalThis.PreviewI18n.createFallbackUiI18n(DEFAULT_SETTINGS)
@@ -30,6 +31,7 @@ let listenersAttached = false;
 const DEBUG_PREVIEW = false;
 const ORIGINAL_LIVENESS_GRACE_MS = 1000;
 const POPUP_HARD_TIMEOUT_MS = 12000;
+const POPUP_READER_ERROR_TIMEOUT_MS = 3500;
 const {
   POPUP_MIN_WIDTH,
   POPUP_MIN_HEIGHT,
@@ -84,6 +86,7 @@ function applyStoredSettings(settings) {
   hoverDelay = settings.hoverDelay;
   interactionType = settings.interactionType;
   triggerKey = settings.triggerKey;
+  readerModeSuggestionsEnabled = settings.readerModeSuggestions;
   popupSizeSettings = normalizePreviewSizeSettings(settings);
   currentThemeMode = settings.themeMode;
 }
@@ -129,8 +132,8 @@ readSettings().then((settings) => {
     applyThemeToMountedSurfaces();
   }
 
-  // Attach listeners if extension is enabled
-  if (enabled && !runtimeContext.isPreviewPopupRuntime) attachListeners();
+  // Preview popups can still act as source/bridge contexts even though they do not own popup lifecycle.
+  if (enabled) attachListeners();
   refreshUiI18n(settings);
 });
 
@@ -288,7 +291,6 @@ function resetHoverInteraction() {
 }
 
 function dispatchHoverClear() {
-  if (runtimeContext.isPreviewPopupRuntime) return;
   if (runtimeContext.isTopWindow) {
     clearSharedHoverCandidate(runtimeContext.sourceContextId, runtimeContext.frameSessionId);
     return;
@@ -300,7 +302,6 @@ function dispatchHoverClear() {
 }
 
 function dispatchSourceContextTeardown() {
-  if (runtimeContext.isPreviewPopupRuntime) return;
   if (runtimeContext.isTopWindow) {
     retireFrameSession(runtimeContext.sourceContextId, runtimeContext.frameSessionId);
     return;
@@ -312,7 +313,6 @@ function dispatchSourceContextTeardown() {
 }
 
 function dispatchKeyPreviewOpen() {
-  if (runtimeContext.isPreviewPopupRuntime) return;
   if (runtimeContext.isTopWindow) {
     openKeyPreviewFromSharedHover();
     return;
@@ -524,7 +524,7 @@ function relayFrameBridgeMessage(message) {
 }
 
 function routeFrameBridgeMessage(event, message) {
-  if (runtimeContext.isPreviewPopupRuntime || !isDirectChildWindow(event.source)) return;
+  if (!isDirectChildWindow(event.source)) return;
   if (isRetiredFrameSession(message.sourceContextId, message.frameSessionId)) return;
 
   if (message.action === 'clearHover') {
@@ -575,19 +575,35 @@ function normalizePopupRuntimeMessage(data) {
   if (typeof data.action !== 'string' || typeof data.popupId !== 'string' || typeof data.popupSessionId !== 'string') {
     return null;
   }
-  if (
-    data.action !== POPUP_RUNTIME_ACTIONS.BRING_TO_FRONT &&
-    data.action !== POPUP_RUNTIME_ACTIONS.UPDATE_URL &&
-    data.action !== POPUP_RUNTIME_ACTIONS.FRAME_ALIVE
-  ) {
-    return null;
+  if (data.action === POPUP_RUNTIME_ACTIONS.BRING_TO_FRONT || data.action === POPUP_RUNTIME_ACTIONS.UPDATE_URL || data.action === POPUP_RUNTIME_ACTIONS.FRAME_ALIVE) {
+    return {
+      action: data.action,
+      popupId: data.popupId,
+      popupSessionId: data.popupSessionId,
+      url: typeof data.url === 'string' ? data.url : null
+    };
   }
-  return {
-    action: data.action,
-    popupId: data.popupId,
-    popupSessionId: data.popupSessionId,
-    url: typeof data.url === 'string' ? data.url : null
-  };
+  if (data.action === POPUP_RUNTIME_ACTIONS.REPORT_READERABILITY) {
+    return {
+      action: data.action,
+      popupId: data.popupId,
+      popupSessionId: data.popupSessionId,
+      url: typeof data.url === 'string' ? data.url : null,
+      readerable: data.readerable === true
+    };
+  }
+  if (data.action === POPUP_RUNTIME_ACTIONS.READER_MODE_RESULT && typeof data.requestId === 'string') {
+    return {
+      action: data.action,
+      popupId: data.popupId,
+      popupSessionId: data.popupSessionId,
+      url: typeof data.url === 'string' ? data.url : null,
+      requestId: data.requestId,
+      success: data.success === true,
+      article: data.article && typeof data.article === 'object' ? data.article : null
+    };
+  }
+  return null;
 }
 
 function routePopupRuntimeMessage(message) {
@@ -605,6 +621,14 @@ function routePopupRuntimeMessage(message) {
   }
   if (message.action === POPUP_RUNTIME_ACTIONS.FRAME_ALIVE) {
     markPopupFrameAliveForEntry(popupEntry, message.url || null);
+    return;
+  }
+  if (message.action === POPUP_RUNTIME_ACTIONS.REPORT_READERABILITY) {
+    handlePopupReaderabilityReport(popupEntry, message.url || popupEntry.currentUrl || '', message.readerable);
+    return;
+  }
+  if (message.action === POPUP_RUNTIME_ACTIONS.READER_MODE_RESULT) {
+    handlePopupReaderModeResult(popupEntry, message);
   }
 }
 
@@ -624,7 +648,7 @@ function onWindowMessage(event) {
 }
 
 function onContentKeyDown(e) {
-  if (!enabled || runtimeContext.isPreviewPopupRuntime) return;
+  if (!enabled) return;
   if (interactionType === 'hover') return;
   if (interactionType === 'hoverWithKey') {
     if (triggerKey && e.code === triggerKey) {
@@ -640,7 +664,6 @@ function onContentKeyDown(e) {
 }
 
 function onContextPageHide(event) {
-  if (runtimeContext.isPreviewPopupRuntime) return;
   dispatchHoverClear();
   resetHoverInteraction();
   if (event && event.persisted) return;
@@ -684,7 +707,7 @@ chrome.storage.onChanged.addListener((changes, area) => {
       resetHoverInteraction();
     }
 
-    if (enabled && !runtimeContext.isPreviewPopupRuntime) {
+    if (enabled) {
       attachListeners();
     } else {
       detachListeners();
@@ -697,7 +720,9 @@ chrome.storage.onChanged.addListener((changes, area) => {
     if (ownsVisibleThemeSurfaces()) {
       applyThemeToMountedSurfaces();
     }
-    refreshUiI18n(settings);
+    refreshUiI18n(settings).then(() => {
+      popups.forEach((popupEntry) => updatePopupReaderUi(popupEntry));
+    });
   });
 });
 
@@ -859,6 +884,15 @@ ${buildThemeTokenCss(':host')}
     color: var(--pl-text);
     font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
     line-height: 1.4;
+    --pl-reader-surface: #fffdf9;
+    --pl-reader-surface-subtle: #f6f1e8;
+    --pl-reader-border: #ddd3c3;
+    --pl-reader-border-strong: #bea98b;
+    --pl-reader-text: #1f2933;
+    --pl-reader-muted: #625b51;
+    --pl-reader-link: #1f5fbf;
+    --pl-reader-link-visited: #6f42c1;
+    --pl-reader-code-text: #2f3b4d;
 }
 
 :host(.link-preview-popup--attention) {
@@ -931,6 +965,101 @@ button {
     pointer-events: none;
 }
 
+.link-preview-curtain {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 10px;
+    padding: 8px 12px;
+    border-bottom: 1px solid var(--pl-border);
+    background: color-mix(in srgb, var(--pl-accent) 10%, var(--pl-panel) 90%);
+    color: var(--pl-text);
+}
+
+.link-preview-curtain[hidden] {
+    display: none !important;
+}
+
+.link-preview-curtain--error {
+    background: color-mix(in srgb, var(--pl-notice-bg) 72%, var(--pl-panel) 28%);
+}
+
+.link-preview-curtain-message {
+    flex: 1 1 auto;
+    min-width: 0;
+    font-size: 12px;
+    font-weight: 500;
+    line-height: 1.35;
+}
+
+.link-preview-curtain-actions {
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    flex: 0 0 auto;
+}
+
+.link-preview-curtain-button,
+.link-preview-curtain-dismiss {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    min-height: 28px;
+    margin: 0;
+    border: 1px solid var(--pl-border);
+    background: var(--pl-button-bg);
+    color: var(--pl-text);
+    appearance: none;
+    -webkit-appearance: none;
+    cursor: pointer;
+}
+
+.link-preview-curtain-button {
+    padding: 0 10px;
+    border-radius: 999px;
+    font-size: 12px;
+    font-weight: 600;
+    white-space: nowrap;
+}
+
+.link-preview-curtain-button--primary {
+    border-color: var(--pl-accent);
+    background: var(--pl-accent);
+    color: #ffffff;
+}
+
+.link-preview-curtain-button:hover,
+.link-preview-curtain-dismiss:hover {
+    background: var(--pl-button-bg-hover);
+}
+
+.link-preview-curtain-button--primary:hover {
+    background: var(--pl-accent-hover);
+}
+
+.link-preview-curtain-button:focus-visible,
+.link-preview-curtain-dismiss:focus-visible {
+    outline: 2px solid var(--pl-accent);
+    outline-offset: 1px;
+}
+
+.link-preview-curtain-dismiss {
+    width: 28px;
+    padding: 0;
+    border-radius: 999px;
+}
+
+.link-preview-curtain-dismiss svg {
+    width: 14px;
+    height: 14px;
+    fill: none;
+    stroke: currentColor;
+    stroke-width: 1.8;
+    stroke-linecap: round;
+    stroke-linejoin: round;
+    pointer-events: none;
+}
+
 .link-preview-body {
     position: relative;
     display: flex;
@@ -959,6 +1088,129 @@ button {
     height: 100%;
     border: none;
     background: var(--pl-preview-canvas);
+}
+
+.link-preview-reader {
+    position: absolute;
+    inset: 0;
+    z-index: 2;
+    display: flex;
+    flex-direction: column;
+    background: var(--pl-reader-surface);
+}
+
+.link-preview-reader-toolbar {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 12px 14px 0;
+}
+
+.link-preview-reader-article {
+    flex: 1 1 auto;
+    min-height: 0;
+    overflow: auto;
+    padding: 10px 18px 28px;
+    background: var(--pl-reader-surface);
+    color: var(--pl-reader-text);
+}
+
+.link-preview-reader-title {
+    margin: 0 0 10px;
+    color: var(--pl-reader-text);
+    font-size: 24px;
+    line-height: 1.2;
+}
+
+.link-preview-reader-meta {
+    margin: 0 0 12px;
+    color: var(--pl-reader-muted);
+    font-size: 12px;
+}
+
+.link-preview-reader-excerpt {
+    margin: 0 0 18px;
+    color: var(--pl-reader-text);
+    font-size: 14px;
+    line-height: 1.5;
+}
+
+.link-preview-reader-content {
+    color: var(--pl-reader-text);
+    font-size: 15px;
+    line-height: 1.7;
+}
+
+.link-preview-reader-content :where(h1, h2, h3, h4, h5, h6, strong, b, th) {
+    color: var(--pl-reader-text);
+}
+
+.link-preview-reader-content :where(p, li, td, figcaption, small) {
+    color: inherit;
+}
+
+.link-preview-reader-content > *:first-child {
+    margin-top: 0;
+}
+
+.link-preview-reader-content > *:last-child {
+    margin-bottom: 0;
+}
+
+.link-preview-reader-content a {
+    color: var(--pl-reader-link);
+}
+
+.link-preview-reader-content a:visited {
+    color: var(--pl-reader-link-visited);
+}
+
+.link-preview-reader-content img,
+.link-preview-reader-content picture {
+    display: block;
+    max-width: 100%;
+    height: auto;
+}
+
+.link-preview-reader-content pre,
+.link-preview-reader-content code {
+    font-family: ui-monospace, SFMono-Regular, Consolas, monospace;
+    color: var(--pl-reader-code-text);
+}
+
+.link-preview-reader-content code {
+    padding: 0.08em 0.3em;
+    border-radius: 4px;
+    background: var(--pl-reader-surface-subtle);
+}
+
+.link-preview-reader-content pre {
+    overflow: auto;
+    padding: 12px;
+    border: 1px solid var(--pl-reader-border);
+    border-radius: 8px;
+    background: var(--pl-reader-surface-subtle);
+}
+
+.link-preview-reader-content pre code {
+    padding: 0;
+    background: transparent;
+}
+
+.link-preview-reader-content blockquote {
+    margin: 1.25em 0;
+    padding-left: 14px;
+    border-left: 3px solid var(--pl-reader-border-strong);
+    color: var(--pl-reader-muted);
+}
+
+.link-preview-reader-content table {
+    border-collapse: collapse;
+}
+
+.link-preview-reader-content :where(th, td) {
+    border: 1px solid var(--pl-reader-border);
+    padding: 0.45em 0.6em;
 }
 
 .link-preview-control {
@@ -1099,6 +1351,27 @@ const POPUP_CONTROL_ICON_MARKUP = {
     close: '<svg viewBox="0 0 20 20" aria-hidden="true"><path d="M6 6l8 8"></path><path d="M14 6l-8 8"></path></svg>'
 };
 
+const popupReaderMode = globalThis.PreviewPopupReaderMode.createController({
+    t,
+    isReaderModeSuggestionsEnabled: () => readerModeSuggestionsEnabled,
+    readerErrorTimeoutMs: POPUP_READER_ERROR_TIMEOUT_MS,
+    popupControlCloseIconMarkup: POPUP_CONTROL_ICON_MARKUP.close,
+    generateRuntimeId,
+    loadPopupUrl,
+    postPopupRuntimeMessage,
+    requestReaderModeAction: POPUP_RUNTIME_ACTIONS.REQUEST_READER_MODE
+});
+const normalizePopupPageContextKey = popupReaderMode.normalizePageContextKey;
+const createPopupReaderState = popupReaderMode.createState;
+const getPopupReaderState = popupReaderMode.getState;
+const clearPopupReaderErrorTimer = popupReaderMode.clearErrorTimer;
+const removePopupReaderView = popupReaderMode.removeView;
+const syncPopupReaderPageContext = popupReaderMode.syncPageContext;
+const updatePopupReaderUi = popupReaderMode.updateUi;
+const openPopupReaderMode = popupReaderMode.openMode;
+const handlePopupReaderabilityReport = popupReaderMode.handleReaderabilityReport;
+const handlePopupReaderModeResult = popupReaderMode.handleReaderModeResult;
+
 function getPopupHeaderLabels() {
     return {
         openInNewTab: t('preview_openInNewTab'),
@@ -1107,6 +1380,19 @@ function getPopupHeaderLabels() {
         closeAllText: t('preview_closeAll'),
         closeAllAriaLabel: t('preview_closeAllAriaLabel')
     };
+}
+function postPopupRuntimeMessage(popupEntry, action, payload = {}) {
+    if (!popupEntry?.iframe?.contentWindow || !popupEntry.popupSessionId) return false;
+    popupEntry.iframe.contentWindow.postMessage({
+        source: PREVIEW_MESSAGE_SOURCE,
+        type: POPUP_RUNTIME_MESSAGE_TYPE,
+        version: PREVIEW_MESSAGE_VERSION,
+        action,
+        popupId: popupEntry.popupId,
+        popupSessionId: popupEntry.popupSessionId,
+        ...payload
+    }, '*');
+    return true;
 }
 
 function applyPopupCoordinates(popupEntry, left, top) {
@@ -1553,18 +1839,22 @@ function createPopup(url, x, y, anchorRect, options = {}) {
         bodyContainer: null,
         iframe: null,
         fallback: null,
+        curtain: null,
+        readerView: null,
         loadingBar: null,
         closeAllButton: null,
         loadingAnimationTimer: null,
         blockedTimeoutTimer: null,
         postLoadGraceTimer: null,
+        readerErrorTimer: null,
         activeCandidateLoaded: false,
         activeCandidateFrameAlive: false,
         attentionTimer: null,
         activePointerInteractionCleanup: null,
         isClosing: false,
         x,
-        y
+        y,
+        readerState: createPopupReaderState()
     };
 
     let popup = document.createElement('div');
@@ -1599,6 +1889,11 @@ function createPopup(url, x, y, anchorRect, options = {}) {
     closeAllBtn.hidden = true;
     closeAllBtn.disabled = true;
     topBar.appendChild(closeAllBtn);
+
+    let curtain = document.createElement('div');
+    curtain.className = 'link-preview-curtain';
+    curtain.hidden = true;
+    shadowRoot.appendChild(curtain);
 
     // Create scrollable body container
     let bodyContainer = document.createElement('div');
@@ -1637,10 +1932,12 @@ function createPopup(url, x, y, anchorRect, options = {}) {
     popupEntry.popup = popup;
     popupEntry.shadowRoot = shadowRoot;
     popupEntry.topBar = topBar;
+    popupEntry.curtain = curtain;
     popupEntry.bodyContainer = bodyContainer;
     popupEntry.closeAllButton = closeAllBtn;
     popups.push(popupEntry);
     syncPopupCollectionActions();
+    syncPopupReaderPageContext(popupEntry, url);
 
     const measuredWidth = popup.offsetWidth || popup.getBoundingClientRect().width || 0;
     const measuredHeight = popup.offsetHeight || popup.getBoundingClientRect().height || 0;
@@ -1729,8 +2026,12 @@ function closePopup(popupId) {
         clearTimeout(entry.attentionTimer);
         entry.attentionTimer = null;
     }
+    clearPopupReaderErrorTimer(entry);
     clearPopupLoadLifecycle(entry);
     clearPopupBodyContent(entry);
+    if (entry.curtain) {
+        entry.curtain.hidden = true;
+    }
     entry.popup.style.pointerEvents = 'none';
     entry.popup.style.opacity = '0';
     setTimeout(() => {
@@ -1758,6 +2059,7 @@ function clearPopupLoadLifecycle(popupEntry) {
 function setPopupLoadingState(popupEntry) {
     clearPopupLoadLifecycle(popupEntry);
     popupEntry.state = 'loading';
+    updatePopupReaderUi(popupEntry);
     if (!popupEntry.loadingBar) return;
     const loadingBar = popupEntry.loadingBar;
     loadingBar.style.background = '';
@@ -1854,6 +2156,7 @@ function renderPopupFallback(popupEntry, message, state) {
 function clearPopupBodyContent(popupEntry) {
     if (!popupEntry.bodyContainer) return;
     clearPopupRuntimeBinding(popupEntry);
+    removePopupReaderView(popupEntry, { preserveArticle: false });
     if (popupEntry.iframe && popupEntry.iframe.parentNode === popupEntry.bodyContainer) {
         popupEntry.bodyContainer.removeChild(popupEntry.iframe);
     }
@@ -1891,6 +2194,7 @@ function finalizePopupReady(popupEntry, iframe) {
     popupEntry.currentUrl = getLoadedIframeUrl(popupEntry, iframe);
     popupEntry.currentPreviewUrl = popupEntry.previewCandidates[popupEntry.activeCandidateIndex] || popupEntry.currentPreviewUrl;
     popupEntry.state = 'ready';
+    syncPopupReaderPageContext(popupEntry, popupEntry.currentUrl);
     logPreviewDebug('finalize ready', {
         popupId: popupEntry.popupId,
         attemptId: popupEntry.activeAttemptId,
@@ -1898,6 +2202,7 @@ function finalizePopupReady(popupEntry, iframe) {
         url: popupEntry.currentPreviewUrl
     });
     finishPopupLoadingState(popupEntry);
+    updatePopupReaderUi(popupEntry);
 }
 
 function finalizePopupBlocked(popupEntry, messageKey) {
@@ -1916,6 +2221,7 @@ function finalizePopupBlocked(popupEntry, messageKey) {
         message,
         'blocked'
     );
+    updatePopupReaderUi(popupEntry);
 }
 
 function advanceToNextCandidate(popupEntry, attemptId) {
@@ -2028,6 +2334,7 @@ function mountPopupIframe(popupEntry, url) {
 function loadPopupUrl(popupEntry, url, options = {}) {
     if (!popupEntry || !url || !popupEntry.bodyContainer) return;
     const { preserveCandidateIndex = false } = options;
+    syncPopupReaderPageContext(popupEntry, popupEntry.currentUrl || url, { forceRefresh: true });
     popupEntry.requestedUrl = url;
     popupEntry.originalUrl = url;
     popupEntry.previewIdentityKey = getPreviewIdentityKey(url);
@@ -2098,18 +2405,19 @@ function getPopupByRuntimeBinding(popupId, popupSessionId) {
 function reloadPopup(popupId) {
     const entry = getPopupById(popupId);
     if (!entry) return;
-    const reloadUrl = entry.originalUrl || entry.requestedUrl;
+    const reloadUrl = entry.currentUrl || entry.originalUrl || entry.requestedUrl;
     loadPopupUrl(entry, reloadUrl);
 }
 
 function syncPopupCurrentUrlForEntry(popupEntry, currentUrl) {
     if (!popupEntry || !currentUrl) return;
     popupEntry.currentUrl = currentUrl;
+    syncPopupReaderPageContext(popupEntry, currentUrl);
 }
 
 function markPopupFrameAliveForEntry(popupEntry, currentUrl) {
     if (!popupEntry || !popupEntry.iframe) return;
-    if (currentUrl) popupEntry.currentUrl = currentUrl;
+    if (currentUrl) syncPopupCurrentUrlForEntry(popupEntry, currentUrl);
     if (!popupEntry.activeCandidateFrameAlive) {
         popupEntry.activeCandidateFrameAlive = true;
         const candidateState = getActiveCandidateState(popupEntry);

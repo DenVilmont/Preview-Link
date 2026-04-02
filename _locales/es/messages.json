@@ -230,6 +230,21 @@
   "preview_closeAllAriaLabel": {
     "message": "Cerrar todas las ventanas emergentes de vista previa en esta página"
   },
+  "preview_readerSuggestion": {
+    "message": "Hay un modo lectura disponible para esta página."
+  },
+  "preview_openReaderMode": {
+    "message": "Abrir modo lectura"
+  },
+  "preview_dismissReaderSuggestion": {
+    "message": "Descartar sugerencia de modo lectura"
+  },
+  "preview_backToLivePreview": {
+    "message": "Volver a la vista en vivo"
+  },
+  "preview_readerModeFailed": {
+    "message": "No se pudo abrir el modo lectura para esta página."
+  },
   "fallback_openInNewTab": {
     "message": "Abrir en una pestaña nueva"
   },
