@@ -15,6 +15,7 @@
   } = globalThis.PreviewNavigation;
   const popupRuntimeBinding = parsePreviewPopupBindingFromWindowName();
   if (!popupRuntimeBinding) return;
+
   const READERABILITY_RECHECK_DELAY_MS = 1200;
   const MIN_READER_ARTICLE_LENGTH = 200;
 
@@ -89,29 +90,43 @@
     window.location.assign(typeof url === 'string' ? url : url.toString());
   }
 
-  applyPreviewScrollContainment();
-  if (!document.body) {
-    window.addEventListener('DOMContentLoaded', applyPreviewScrollContainment, { once: true });
+  function classifyWindowOpenNavigation(rawUrl) {
+    if (rawUrl === undefined || rawUrl === null) return null;
+    const href = typeof rawUrl === 'string'
+      ? rawUrl
+      : (typeof rawUrl?.toString === 'function' ? rawUrl.toString() : '');
+    if (!href) return null;
+    return classifyNavigationTarget({
+      href,
+      baseUrl: window.location.href,
+      currentDocumentUrl: window.location.href
+    });
   }
 
-  function sendPopupUrlUpdate() {
-    if (!iframeEnabled) return;
-    window.parent.postMessage(
-      createPopupRuntimeMessage(POPUP_RUNTIME_ACTIONS.UPDATE_URL, {
-        url: window.location.href
-      }),
-      '*'
-    );
+  function tryHandleContainedWindowOpen(rawUrl) {
+    if (!iframeEnabled) return false;
+    const navigation = classifyWindowOpenNavigation(rawUrl);
+    if (!navigation || !navigation.url) return false;
+    if (navigation.kind !== 'document' && navigation.kind !== 'hash') return false;
+    return requestContainedPreviewNavigation(navigation.url);
   }
 
-  function sendPreviewFrameAlive() {
-    if (!iframeEnabled) return;
-    window.parent.postMessage(
-      createPopupRuntimeMessage(POPUP_RUNTIME_ACTIONS.FRAME_ALIVE, {
-        url: window.location.href
-      }),
-      '*'
-    );
+  function installPreviewWindowOpenBridge() {
+    const nativeWindowOpen = typeof window.open === 'function' ? window.open.bind(window) : null;
+    if (!nativeWindowOpen) return;
+
+    const previewWindowOpenBridge = function(url, target, features) {
+      if (tryHandleContainedWindowOpen(url)) {
+        return window;
+      }
+      return nativeWindowOpen(url, target, features);
+    };
+
+    try {
+      window.open = previewWindowOpenBridge;
+    } catch (_) {
+      // Some documents may expose a non-writable window.open; leave native behavior unchanged there.
+    }
   }
 
   function createPopupRuntimeMessage(action, payload = {}) {
@@ -124,6 +139,43 @@
       popupSessionId: popupRuntimeBinding.popupSessionId,
       ...payload
     };
+  }
+
+  function postPopupRuntimeMessageToTop(action, payload = {}) {
+    if (!iframeEnabled) return false;
+    const message = createPopupRuntimeMessage(action, payload);
+    if (window.top === window) return false;
+    window.top.postMessage(message, '*');
+    return true;
+  }
+
+  function requestContainedPreviewNavigation(url) {
+    if (!url) return false;
+    schedulePreviewNavigationUpdateCheck();
+    queueMicrotask(() => {
+      navigatePreviewInPlace(url);
+    });
+    return true;
+  }
+
+  applyPreviewScrollContainment();
+  installPreviewWindowOpenBridge();
+  if (!document.body) {
+    window.addEventListener('DOMContentLoaded', applyPreviewScrollContainment, { once: true });
+  }
+
+  function sendPopupUrlUpdate() {
+    if (!iframeEnabled) return;
+    postPopupRuntimeMessageToTop(POPUP_RUNTIME_ACTIONS.UPDATE_URL, {
+      url: window.location.href
+    });
+  }
+
+  function sendPreviewFrameAlive() {
+    if (!iframeEnabled) return;
+    postPopupRuntimeMessageToTop(POPUP_RUNTIME_ACTIONS.FRAME_ALIVE, {
+      url: window.location.href
+    });
   }
 
   function isHtmlLikePreviewDocument() {
@@ -154,13 +206,10 @@
     if (!iframeEnabled) return;
     if (lastReportedReaderable === readerable) return;
     lastReportedReaderable = readerable;
-    window.parent.postMessage(
-      createPopupRuntimeMessage(POPUP_RUNTIME_ACTIONS.REPORT_READERABILITY, {
-        url: window.location.href,
-        readerable: !!readerable
-      }),
-      '*'
-    );
+    postPopupRuntimeMessageToTop(POPUP_RUNTIME_ACTIONS.REPORT_READERABILITY, {
+      url: window.location.href,
+      readerable: !!readerable
+    });
   }
 
   function evaluateReaderability(options = {}) {
@@ -235,15 +284,6 @@
     };
   }
 
-  function createReaderModeResultPayload(requestId, success, article = null) {
-    return createPopupRuntimeMessage(POPUP_RUNTIME_ACTIONS.READER_MODE_RESULT, {
-      requestId,
-      url: window.location.href,
-      success: !!success,
-      article
-    });
-  }
-
   function isMeaningfulReaderArticle(article) {
     if (!article || typeof article !== 'object') return false;
     const textContent = typeof article.textContent === 'string' ? article.textContent.trim() : '';
@@ -285,10 +325,12 @@
       }
     })();
 
-    window.parent.postMessage(
-      createReaderModeResultPayload(message.requestId, !!article, article),
-      '*'
-    );
+    postPopupRuntimeMessageToTop(POPUP_RUNTIME_ACTIONS.READER_MODE_RESULT, {
+      requestId: message.requestId,
+      url: window.location.href,
+      success: !!article,
+      article
+    });
   }
 
   // Child script liveness handshake: emit as soon as this content script runs.
@@ -316,20 +358,25 @@
   window.addEventListener('popstate', sendPreviewNavigationUpdate);
 
   document.addEventListener('click', (event) => {
+    if (!iframeEnabled) return;
     const navigation = classifyPreviewNavigation(event);
     if (!navigation) return;
     if (navigation.kind === 'hash') {
-      schedulePreviewNavigationUpdateCheck();
+      if (!event.cancelable) {
+        schedulePreviewNavigationUpdateCheck();
+        return;
+      }
+      event.preventDefault();
+      requestContainedPreviewNavigation(navigation.url);
       return;
     }
     if (navigation.kind !== 'document') return;
     if ((navigation.opensOutsideContext || navigation.isModifiedClick || navigation.isMiddleClick) && event.cancelable) {
       const initialHref = window.location.href;
       event.preventDefault();
-      schedulePreviewNavigationUpdateCheck();
       queueMicrotask(() => {
         if (window.location.href !== initialHref) return;
-        navigatePreviewInPlace(navigation.url);
+        requestContainedPreviewNavigation(navigation.url);
       });
       return;
     }
@@ -337,15 +384,13 @@
   }, true);
 
   document.addEventListener('auxclick', (event) => {
+    if (!iframeEnabled) return;
     if (event.button !== 1) return;
     const navigation = classifyPreviewNavigation(event);
     if (!navigation || navigation.kind !== 'document' || !event.cancelable) return;
-    const initialHref = window.location.href;
     event.preventDefault();
-    schedulePreviewNavigationUpdateCheck();
     queueMicrotask(() => {
-      if (window.location.href !== initialHref) return;
-      navigatePreviewInPlace(navigation.url);
+      requestContainedPreviewNavigation(navigation.url);
     });
   }, true);
 
@@ -358,11 +403,8 @@
   // Bring this popup to front when clicking inside its iframe
   document.addEventListener('pointerdown', () => {
     if (!iframeEnabled) return;
-    window.parent.postMessage(
-      createPopupRuntimeMessage(POPUP_RUNTIME_ACTIONS.BRING_TO_FRONT, {
-        url: window.location.href
-      }),
-      '*'
-    );
+    postPopupRuntimeMessageToTop(POPUP_RUNTIME_ACTIONS.BRING_TO_FRONT, {
+      url: window.location.href
+    });
   });
 })();

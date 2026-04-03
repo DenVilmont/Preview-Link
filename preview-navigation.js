@@ -3,9 +3,32 @@
 
   const DOCUMENT_PROTOCOLS = Object.freeze(['http:', 'https:']);
 
+  function getAnchorCandidateFromNode(node) {
+    if (!node || typeof node !== 'object') return null;
+    if (typeof node.matches === 'function' && node.matches('a[href]')) {
+      return node;
+    }
+    if (typeof node.closest === 'function') {
+      return node.closest('a[href]');
+    }
+    return null;
+  }
+
+  function getNavigationAnchorFromComposedPath(event) {
+    if (!event || typeof event.composedPath !== 'function') return null;
+    const composedPath = event.composedPath();
+    if (!Array.isArray(composedPath)) return null;
+    for (const pathNode of composedPath) {
+      const anchor = getAnchorCandidateFromNode(pathNode);
+      if (anchor) return anchor;
+    }
+    return null;
+  }
+
   function getNavigationAnchorFromEvent(event) {
-    if (!event || !event.target || typeof event.target.closest !== 'function') return null;
-    return event.target.closest('a[href]');
+    const composedPathAnchor = getNavigationAnchorFromComposedPath(event);
+    if (composedPathAnchor) return composedPathAnchor;
+    return getAnchorCandidateFromNode(event?.target || null);
   }
 
   function normalizeNavigationTarget(anchor) {

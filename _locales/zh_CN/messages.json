@@ -144,7 +144,7 @@
     "message": "视频模式"
   },
   "settings_videoMode_description": {
-    "message": "保持适合视频的预览行为。"
+    "message": "启用时，受支持的视频链接会先尝试在嵌入播放器中打开。关闭时，它们会先尝试加载完整页面。"
   },
   "settings_compatibility_title": {
     "message": "兼容性"
@@ -229,6 +229,9 @@
   },
   "preview_closeAllAriaLabel": {
     "message": "关闭此页面上的所有预览弹窗"
+  },
+  "preview_videoBadge": {
+    "message": "视频 • $1"
   },
   "preview_readerSuggestion": {
     "message": "此页面可使用阅读模式。"

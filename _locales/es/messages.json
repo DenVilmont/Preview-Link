@@ -144,7 +144,7 @@
     "message": "Modo vídeo"
   },
   "settings_videoMode_description": {
-    "message": "Mantén activado el comportamiento de vista previa pensado para vídeo."
+    "message": "Cuando está activado, los enlaces de video compatibles primero intentan abrirse en el reproductor incrustado. Cuando está desactivado, primero intentan cargar la página completa."
   },
   "settings_compatibility_title": {
     "message": "Compatibilidad"
@@ -229,6 +229,9 @@
   },
   "preview_closeAllAriaLabel": {
     "message": "Cerrar todas las ventanas emergentes de vista previa en esta página"
+  },
+  "preview_videoBadge": {
+    "message": "Vídeo • $1"
   },
   "preview_readerSuggestion": {
     "message": "Hay un modo lectura disponible para esta página."

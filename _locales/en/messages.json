@@ -144,7 +144,7 @@
     "message": "Video mode"
   },
   "settings_videoMode_description": {
-    "message": "Keep video-friendly preview behavior on."
+    "message": "When enabled, supported video links first try opening in the embedded player. When disabled, they first try loading the full page."
   },
   "settings_compatibility_title": {
     "message": "Compatibility"
@@ -229,6 +229,9 @@
   },
   "preview_closeAllAriaLabel": {
     "message": "Close all preview popups on this page"
+  },
+  "preview_videoBadge": {
+    "message": "Video • $1"
   },
   "preview_readerSuggestion": {
     "message": "Reader mode is available for this page."

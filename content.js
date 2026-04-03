@@ -23,6 +23,7 @@ let enabled = DEFAULT_SETTINGS.enabled;
 let interactionType = DEFAULT_SETTINGS.interactionType;
 let triggerKey = DEFAULT_SETTINGS.triggerKey;
 let readerModeSuggestionsEnabled = DEFAULT_SETTINGS.readerModeSuggestions;
+let videoModeEnabled = DEFAULT_SETTINGS.videoModeEnabled;
 let currentThemeMode = DEFAULT_SETTINGS.themeMode;
 let currentI18n = getUiI18n
   ? globalThis.PreviewI18n.createFallbackUiI18n(DEFAULT_SETTINGS)
@@ -87,6 +88,7 @@ function applyStoredSettings(settings) {
   interactionType = settings.interactionType;
   triggerKey = settings.triggerKey;
   readerModeSuggestionsEnabled = settings.readerModeSuggestions;
+  videoModeEnabled = settings.videoModeEnabled;
   popupSizeSettings = normalizePreviewSizeSettings(settings);
   currentThemeMode = settings.themeMode;
 }
@@ -317,13 +319,77 @@ function dispatchKeyPreviewOpen() {
     openKeyPreviewFromSharedHover();
     return;
   }
-  const previewRequest = createLocalPreviewRequest(hoverInteraction.activeUrl, hoverInteraction.activeRect, 'key');
-  if (!previewRequest) return;
-  dispatchPreviewRequest('requestPreviewOpen', previewRequest);
+  window.parent.postMessage(
+    createFrameBridgeMessage('requestSharedHoverOpen'),
+    '*'
+  );
 }
 
 function isEligibleAnchor(link) {
   return !!(link && link.href && link.offsetWidth > 0 && link.offsetHeight > 0);
+}
+
+function getActiveElementChain(root = document) {
+  const activeElementChain = [];
+  let activeElement = root && 'activeElement' in root ? root.activeElement : null;
+  while (activeElement && !activeElementChain.includes(activeElement)) {
+    activeElementChain.push(activeElement);
+    const nextRoot = activeElement.shadowRoot;
+    if (!nextRoot || !nextRoot.activeElement) break;
+    activeElement = nextRoot.activeElement;
+  }
+  return activeElementChain;
+}
+
+function getFocusedPreviewPopupContext() {
+  const activeElementChain = getActiveElementChain(document);
+  if (!activeElementChain.length) return null;
+
+  for (const popupEntry of popups) {
+    if (!popupEntry || popupEntry.isClosing) continue;
+    const matchesPopupFocus = activeElementChain.some((element) => {
+      if (!element) return false;
+      if (element === popupEntry.popup || element === popupEntry.iframe) return true;
+      if (!popupEntry.shadowRoot || typeof element.getRootNode !== 'function') return false;
+      return element.getRootNode() === popupEntry.shadowRoot;
+    });
+    if (!matchesPopupFocus) continue;
+    return {
+      popupEntry,
+      activeElementChain,
+      effectiveActiveElement: activeElementChain[activeElementChain.length - 1]
+    };
+  }
+
+  return null;
+}
+
+function normalizeFocusForMainPageHoverIntent() {
+  if (!runtimeContext.isTopWindow || runtimeContext.isPreviewPopupRuntime) return;
+  if (interactionType !== 'hoverWithKey') return;
+  const focusedPreviewContext = getFocusedPreviewPopupContext();
+  if (!focusedPreviewContext) return;
+
+  const activeElement = focusedPreviewContext.effectiveActiveElement;
+
+  if (typeof activeElement.blur === 'function') {
+    activeElement.blur();
+  }
+
+  const focusTarget = document.body || document.documentElement;
+  if (!focusTarget || typeof focusTarget.focus !== 'function') return;
+  const hadTabIndex = typeof focusTarget.hasAttribute === 'function' && focusTarget.hasAttribute('tabindex');
+  if (!hadTabIndex && focusTarget.tabIndex < 0 && typeof focusTarget.setAttribute === 'function') {
+    focusTarget.setAttribute('tabindex', '-1');
+  }
+  try {
+    focusTarget.focus({ preventScroll: true });
+  } catch (_) {
+    focusTarget.focus();
+  }
+  if (!hadTabIndex && document.activeElement === focusTarget && typeof focusTarget.removeAttribute === 'function') {
+    focusTarget.removeAttribute('tabindex');
+  }
 }
 
 function onContentPointerOver(e) {
@@ -332,6 +398,7 @@ function onContentPointerOver(e) {
   if (!isEligibleAnchor(link)) {
     return;
   }
+  normalizeFocusForMainPageHoverIntent();
   if (hoverInteraction.activeLink === link) return;
 
   clearHoverTimer();
@@ -485,7 +552,7 @@ function normalizeFrameBridgeMessage(data) {
   if (typeof data.action !== 'string') return null;
   if (typeof data.sourceContextId !== 'string' || typeof data.frameSessionId !== 'string') return null;
 
-  if (data.action === 'clearHover' || data.action === 'sourceContextTeardown') {
+  if (data.action === 'clearHover' || data.action === 'sourceContextTeardown' || data.action === 'requestSharedHoverOpen') {
     return {
       action: data.action,
       sourceContextId: data.sourceContextId,
@@ -545,6 +612,15 @@ function routeFrameBridgeMessage(event, message) {
     return;
   }
 
+  if (message.action === 'requestSharedHoverOpen') {
+    if (runtimeContext.isTopWindow) {
+      openKeyPreviewFromSharedHover();
+      return;
+    }
+    relayFrameBridgeMessage(message);
+    return;
+  }
+
   const sourceFrameElement = getDirectChildFrameElement(event.source);
   if (!sourceFrameElement) return;
   const rect = addFrameOffsetToRect(message.rect, sourceFrameElement.getBoundingClientRect());
@@ -575,7 +651,12 @@ function normalizePopupRuntimeMessage(data) {
   if (typeof data.action !== 'string' || typeof data.popupId !== 'string' || typeof data.popupSessionId !== 'string') {
     return null;
   }
-  if (data.action === POPUP_RUNTIME_ACTIONS.BRING_TO_FRONT || data.action === POPUP_RUNTIME_ACTIONS.UPDATE_URL || data.action === POPUP_RUNTIME_ACTIONS.FRAME_ALIVE) {
+  if (
+    data.action === POPUP_RUNTIME_ACTIONS.BRING_TO_FRONT ||
+    data.action === POPUP_RUNTIME_ACTIONS.NAVIGATE_PREVIEW ||
+    data.action === POPUP_RUNTIME_ACTIONS.UPDATE_URL ||
+    data.action === POPUP_RUNTIME_ACTIONS.FRAME_ALIVE
+  ) {
     return {
       action: data.action,
       popupId: data.popupId,
@@ -613,6 +694,12 @@ function routePopupRuntimeMessage(message) {
 
   if (message.action === POPUP_RUNTIME_ACTIONS.BRING_TO_FRONT) {
     bringToFront(popupEntry.popupId);
+    return;
+  }
+  if (message.action === POPUP_RUNTIME_ACTIONS.NAVIGATE_PREVIEW) {
+    if (!message.url) return;
+    bringToFront(popupEntry.popupId);
+    loadPopupUrl(popupEntry, message.url, { preserveSourceContext: true });
     return;
   }
   if (message.action === POPUP_RUNTIME_ACTIONS.UPDATE_URL) {
@@ -721,7 +808,10 @@ chrome.storage.onChanged.addListener((changes, area) => {
       applyThemeToMountedSurfaces();
     }
     refreshUiI18n(settings).then(() => {
-      popups.forEach((popupEntry) => updatePopupReaderUi(popupEntry));
+      popups.forEach((popupEntry) => {
+        syncPopupVideoModeBadge(popupEntry);
+        updatePopupReaderUi(popupEntry);
+      });
     });
   });
 });
@@ -963,6 +1053,34 @@ button {
 
 .link-preview-topbar-action:disabled {
     pointer-events: none;
+}
+
+.link-preview-topbar-badge {
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%);
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    max-width: calc(100% - 210px);
+    min-height: 22px;
+    padding: 0 10px;
+    border: 1px solid color-mix(in srgb, var(--pl-accent) 18%, var(--pl-border) 82%);
+    border-radius: 999px;
+    background: color-mix(in srgb, var(--pl-accent) 10%, var(--pl-button-bg) 90%);
+    color: var(--pl-accent-strong);
+    font-size: 11px;
+    font-weight: 600;
+    line-height: 1;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    pointer-events: none;
+}
+
+.link-preview-topbar-badge[hidden] {
+    display: none !important;
 }
 
 .link-preview-curtain {
@@ -1639,6 +1757,141 @@ function extractYouTubeVideoId(url) {
     return null;
 }
 
+function parseDurationToSeconds(value) {
+    const normalizedValue = typeof value === 'string' ? value.trim().toLowerCase() : String(value || '').trim().toLowerCase();
+    if (!normalizedValue) return null;
+    if (/^\d+$/.test(normalizedValue)) {
+        const seconds = Number(normalizedValue);
+        return Number.isFinite(seconds) && seconds > 0 ? seconds : null;
+    }
+
+    let totalSeconds = 0;
+    let consumedLength = 0;
+    const durationPattern = /(\d+)(h|m|s)/g;
+    let match;
+    while ((match = durationPattern.exec(normalizedValue)) !== null) {
+        if (match.index !== consumedLength) return null;
+        consumedLength = durationPattern.lastIndex;
+        const amount = Number(match[1]);
+        if (!Number.isFinite(amount)) return null;
+        if (match[2] === 'h') totalSeconds += amount * 3600;
+        if (match[2] === 'm') totalSeconds += amount * 60;
+        if (match[2] === 's') totalSeconds += amount;
+    }
+
+    if (!consumedLength || consumedLength !== normalizedValue.length || totalSeconds <= 0) {
+        return null;
+    }
+
+    return totalSeconds;
+}
+
+function getHashQueryParam(url, paramName) {
+    if (!url || typeof paramName !== 'string') return null;
+    const normalizedHash = String(url.hash || '').replace(/^#/, '').trim();
+    if (!normalizedHash) return null;
+    const hashParams = new URLSearchParams(normalizedHash);
+    const paramValue = hashParams.get(paramName);
+    if (paramValue) return paramValue;
+    if (!normalizedHash.includes('=') && paramName === 't') {
+        return normalizedHash;
+    }
+    return null;
+}
+
+function getYouTubeStartTimeSeconds(url) {
+    const candidates = [
+        url.searchParams.get('start'),
+        url.searchParams.get('t'),
+        getHashQueryParam(url, 'start'),
+        getHashQueryParam(url, 't')
+    ];
+    for (const candidate of candidates) {
+        const seconds = parseDurationToSeconds(candidate);
+        if (seconds) return seconds;
+    }
+    return null;
+}
+
+function getPreservedVimeoTimestampHash(url) {
+    const hash = typeof url?.hash === 'string' ? url.hash.trim() : '';
+    return /^#t=.+/i.test(hash) ? hash : '';
+}
+
+function resolveSupportedVideoPreviewTarget(originalUrl) {
+    let parsed;
+    try {
+        parsed = new URL(originalUrl);
+    } catch (_) {
+        return null;
+    }
+
+    const host = parsed.hostname.toLowerCase();
+    const pathname = parsed.pathname || '';
+
+    const ytVideoId = extractYouTubeVideoId(parsed);
+    if (ytVideoId) {
+        const canonicalUrl = new URL('https://www.youtube.com/watch');
+        canonicalUrl.searchParams.set('v', ytVideoId);
+
+        const embedUrl = new URL(`https://www.youtube-nocookie.com/embed/${ytVideoId}`);
+        const startTimeSeconds = getYouTubeStartTimeSeconds(parsed);
+        if (startTimeSeconds) {
+            canonicalUrl.searchParams.set('start', String(startTimeSeconds));
+            embedUrl.searchParams.set('start', String(startTimeSeconds));
+        }
+
+        return {
+            mode: 'video',
+            provider: 'youtube',
+            providerLabel: 'YouTube',
+            canonicalPageUrl: canonicalUrl.toString(),
+            embedUrl: embedUrl.toString(),
+            previewIdentityKey: `youtube:${ytVideoId}`
+        };
+    }
+
+    if (host === 'vimeo.com' || host === 'www.vimeo.com') {
+        const vimeoMatch = pathname.match(/^\/(\d+)\/?$/);
+        if (vimeoMatch && vimeoMatch[1]) {
+            const videoId = vimeoMatch[1];
+            const canonicalUrl = new URL(`https://vimeo.com/${videoId}`);
+            const embedUrl = new URL(`https://player.vimeo.com/video/${videoId}`);
+            const timestampHash = getPreservedVimeoTimestampHash(parsed);
+            if (timestampHash) {
+                canonicalUrl.hash = timestampHash;
+                embedUrl.hash = timestampHash;
+            }
+            return {
+                mode: 'video',
+                provider: 'vimeo',
+                providerLabel: 'Vimeo',
+                canonicalPageUrl: canonicalUrl.toString(),
+                embedUrl: embedUrl.toString(),
+                previewIdentityKey: `vimeo:${videoId}`
+            };
+        }
+    }
+
+    if (host === 'www.tiktok.com' || host === 'tiktok.com') {
+        const tiktokMatch = pathname.match(/^\/(@[^/]+)\/video\/([^/?#]+)/);
+        if (tiktokMatch && tiktokMatch[1] && tiktokMatch[2]) {
+            const userHandle = tiktokMatch[1];
+            const postId = tiktokMatch[2];
+            return {
+                mode: 'video',
+                provider: 'tiktok',
+                providerLabel: 'TikTok',
+                canonicalPageUrl: `https://www.tiktok.com/${userHandle}/video/${postId}`,
+                embedUrl: `https://www.tiktok.com/player/v1/${postId}`,
+                previewIdentityKey: `tiktok:${postId}`
+            };
+        }
+    }
+
+    return null;
+}
+
 function buildRutubeEmbedUrl(videoId, sourceUrl) {
     const embedUrl = new URL(`https://rutube.ru/play/embed/${videoId}`);
     const safeParams = ['p', 'play', 'access_token', 'token'];
@@ -1689,13 +1942,57 @@ function resolveAlternatePreviewUrl(originalUrl) {
     return null;
 }
 
-function buildPreviewCandidates(originalUrl) {
+function buildLegacyPreviewCandidates(originalUrl) {
     const candidates = [originalUrl];
     const alternateUrl = resolveAlternatePreviewUrl(originalUrl);
     if (alternateUrl && alternateUrl !== originalUrl) {
         candidates.push(alternateUrl);
     }
     return candidates;
+}
+
+function buildPreviewPlan(originalUrl, options = {}) {
+    const explicitVideoModeEnabled = !!options.enableExplicitVideoMode;
+    const supportedVideoTarget = resolveSupportedVideoPreviewTarget(originalUrl);
+
+    if (supportedVideoTarget && explicitVideoModeEnabled) {
+        return {
+            sourceCanonicalUrl: supportedVideoTarget.canonicalPageUrl,
+            previewIdentityKey: supportedVideoTarget.previewIdentityKey,
+            supportedVideoTarget,
+            explicitVideoModeTarget: supportedVideoTarget,
+            previewCandidates: [supportedVideoTarget.embedUrl, supportedVideoTarget.canonicalPageUrl],
+            previewCandidateMetadata: [
+                {
+                    kind: 'video-embed',
+                    quickFailoverOnLoad: false,
+                    isExplicitVideoMode: true,
+                    providerLabel: supportedVideoTarget.providerLabel
+                },
+                {
+                    kind: 'canonical-page',
+                    quickFailoverOnLoad: false,
+                    isExplicitVideoMode: false,
+                    providerLabel: supportedVideoTarget.providerLabel
+                }
+            ]
+        };
+    }
+
+    const previewCandidates = buildLegacyPreviewCandidates(originalUrl);
+    return {
+        sourceCanonicalUrl: supportedVideoTarget ? supportedVideoTarget.canonicalPageUrl : originalUrl,
+        previewIdentityKey: supportedVideoTarget ? supportedVideoTarget.previewIdentityKey : getPreviewIdentityKey(originalUrl),
+        supportedVideoTarget,
+        explicitVideoModeTarget: null,
+        previewCandidates,
+        previewCandidateMetadata: previewCandidates.map((candidateUrl, index) => ({
+            kind: index === 0 ? 'requested-page' : 'compatibility-alternate',
+            quickFailoverOnLoad: index === 0 && previewCandidates.length > 1,
+            isExplicitVideoMode: false,
+            providerLabel: null
+        }))
+    };
 }
 
 function normalizePreviewIdentityFallback(originalUrl) {
@@ -1709,6 +2006,9 @@ function normalizePreviewIdentityFallback(originalUrl) {
 }
 
 function getPreviewIdentityKey(originalUrl) {
+    const supportedVideoTarget = resolveSupportedVideoPreviewTarget(originalUrl);
+    if (supportedVideoTarget) return supportedVideoTarget.previewIdentityKey;
+
     let parsed;
     try {
         parsed = new URL(originalUrl);
@@ -1767,6 +2067,43 @@ function createPopupTextActionButton(modifierClass, text, label, onClick) {
     return button;
 }
 
+function createPopupModeBadge() {
+    const badge = document.createElement('div');
+    badge.className = 'link-preview-topbar-badge';
+    badge.hidden = true;
+    return badge;
+}
+
+function getActivePreviewCandidateMetadata(popupEntry) {
+    if (!popupEntry || !Array.isArray(popupEntry.previewCandidateMetadata)) return null;
+    return popupEntry.previewCandidateMetadata[popupEntry.activeCandidateIndex] || null;
+}
+
+function syncPopupVideoModeBadge(popupEntry) {
+    if (!popupEntry?.videoModeBadge) return;
+    const activeCandidateMetadata = getActivePreviewCandidateMetadata(popupEntry);
+    const shouldShowBadge = !!(activeCandidateMetadata && activeCandidateMetadata.isExplicitVideoMode && activeCandidateMetadata.providerLabel);
+    popupEntry.videoModeBadge.hidden = !shouldShowBadge;
+    popupEntry.videoModeBadge.textContent = shouldShowBadge
+        ? t('preview_videoBadge', [activeCandidateMetadata.providerLabel])
+        : '';
+}
+
+function applyPreviewPlanToPopupEntry(popupEntry, previewPlan, options = {}) {
+    if (!popupEntry || !previewPlan) return;
+    const preserveSourceContext = options.preserveSourceContext !== false;
+    if (!preserveSourceContext || !popupEntry.sourceCanonicalUrl) {
+        popupEntry.sourceCanonicalUrl = previewPlan.sourceCanonicalUrl;
+    }
+    if (!preserveSourceContext || !popupEntry.previewIdentityKey) {
+        popupEntry.previewIdentityKey = previewPlan.previewIdentityKey;
+    }
+    popupEntry.supportedVideoTarget = previewPlan.supportedVideoTarget || null;
+    popupEntry.explicitVideoModeTarget = previewPlan.explicitVideoModeTarget || null;
+    popupEntry.previewCandidates = previewPlan.previewCandidates.slice();
+    popupEntry.previewCandidateMetadata = previewPlan.previewCandidateMetadata.slice();
+}
+
 function syncPopupCollectionActions() {
     const activePopupCount = popups.reduce((count, popupEntry) => {
         return popupEntry.isClosing ? count : count + 1;
@@ -1787,10 +2124,11 @@ function closeAllPopups() {
 function getPopupExternalOpenUrl(popupEntry) {
     if (!popupEntry) return null;
     const candidateUrls = [
-        popupEntry.currentUrl,
-        popupEntry.currentPreviewUrl,
+        popupEntry.sourceCanonicalUrl,
         popupEntry.originalUrl,
-        popupEntry.requestedUrl
+        popupEntry.requestedUrl,
+        popupEntry.currentUrl,
+        popupEntry.currentPreviewUrl
     ];
     for (const candidateUrl of candidateUrls) {
         if (typeof candidateUrl === 'string' && candidateUrl.trim()) {
@@ -1802,7 +2140,8 @@ function getPopupExternalOpenUrl(popupEntry) {
 
 function createPopup(url, x, y, anchorRect, options = {}) {
     if (!runtimeContext.isTopWindow || runtimeContext.isPreviewPopupRuntime) return;
-    const previewIdentityKey = getPreviewIdentityKey(url);
+    const previewPlan = buildPreviewPlan(url, { enableExplicitVideoMode: videoModeEnabled });
+    const previewIdentityKey = previewPlan.previewIdentityKey;
     const existingPopup = popups.find((p) => p.previewIdentityKey === previewIdentityKey);
     if (existingPopup) {
         bringToFront(existingPopup.popupId);
@@ -1821,13 +2160,17 @@ function createPopup(url, x, y, anchorRect, options = {}) {
         originalUrl: url,
         previewIdentityKey,
         requestedUrl: url,
+        sourceCanonicalUrl: previewPlan.sourceCanonicalUrl,
         currentUrl: url,
         sourceContextId: options.sourceContextId || null,
         lastPreviewRequestId: options.previewRequestId || null,
         trigger: options.trigger || null,
         anchorRect: anchorRect || null,
-        currentPreviewUrl: url,
-        previewCandidates: buildPreviewCandidates(url),
+        currentPreviewUrl: previewPlan.previewCandidates[0] || url,
+        previewCandidates: previewPlan.previewCandidates.slice(),
+        previewCandidateMetadata: previewPlan.previewCandidateMetadata.slice(),
+        supportedVideoTarget: previewPlan.supportedVideoTarget || null,
+        explicitVideoModeTarget: previewPlan.explicitVideoModeTarget || null,
         activeCandidateIndex: 0,
         activeAttemptId: 0,
         state: 'loading',
@@ -1840,6 +2183,7 @@ function createPopup(url, x, y, anchorRect, options = {}) {
         iframe: null,
         fallback: null,
         curtain: null,
+        videoModeBadge: null,
         readerView: null,
         loadingBar: null,
         closeAllButton: null,
@@ -1890,6 +2234,9 @@ function createPopup(url, x, y, anchorRect, options = {}) {
     closeAllBtn.disabled = true;
     topBar.appendChild(closeAllBtn);
 
+    let videoModeBadge = createPopupModeBadge();
+    topBar.appendChild(videoModeBadge);
+
     let curtain = document.createElement('div');
     curtain.className = 'link-preview-curtain';
     curtain.hidden = true;
@@ -1935,8 +2282,10 @@ function createPopup(url, x, y, anchorRect, options = {}) {
     popupEntry.curtain = curtain;
     popupEntry.bodyContainer = bodyContainer;
     popupEntry.closeAllButton = closeAllBtn;
+    popupEntry.videoModeBadge = videoModeBadge;
     popups.push(popupEntry);
     syncPopupCollectionActions();
+    syncPopupVideoModeBadge(popupEntry);
     syncPopupReaderPageContext(popupEntry, url);
 
     const measuredWidth = popup.offsetWidth || popup.getBoundingClientRect().width || 0;
@@ -1956,7 +2305,7 @@ function createPopup(url, x, y, anchorRect, options = {}) {
     // Bring this popup to front when clicking on its container (including top bar)
     popup.addEventListener('pointerdown', () => bringToFront(popupEntry.popupId));
     setTimeout(() => { popup.style.opacity = '1'; }, 10);
-    loadPopupUrl(popupEntry, url);
+    loadPopupUrl(popupEntry, url, { preserveSourceContext: false });
 
     // Make popup draggable via the top bar
     topBar.addEventListener('pointerdown', function(e) {
@@ -2180,12 +2529,15 @@ function getLoadedIframeUrl(popupEntry, iframe) {
 function getActiveCandidateState(popupEntry) {
     const candidateIndex = popupEntry.activeCandidateIndex;
     const totalCandidates = popupEntry.previewCandidates.length;
+    const activeCandidateMetadata = getActivePreviewCandidateMetadata(popupEntry);
     return {
         candidateIndex,
         totalCandidates,
+        activeCandidateMetadata,
         hasAlternate: totalCandidates > 1,
         isOriginalCandidate: candidateIndex === 0,
         isAlternateCandidate: candidateIndex > 0,
+        quickFailoverOnLoad: !!activeCandidateMetadata?.quickFailoverOnLoad,
         requiresFrameLiveness: candidateIndex === 0 && totalCandidates === 1
     };
 }
@@ -2202,6 +2554,7 @@ function finalizePopupReady(popupEntry, iframe) {
         url: popupEntry.currentPreviewUrl
     });
     finishPopupLoadingState(popupEntry);
+    syncPopupVideoModeBadge(popupEntry);
     updatePopupReaderUi(popupEntry);
 }
 
@@ -2221,6 +2574,7 @@ function finalizePopupBlocked(popupEntry, messageKey) {
         message,
         'blocked'
     );
+    syncPopupVideoModeBadge(popupEntry);
     updatePopupReaderUi(popupEntry);
 }
 
@@ -2270,6 +2624,7 @@ function mountPopupIframe(popupEntry, url) {
     popupEntry.activeCandidateLoaded = false;
     popupEntry.activeCandidateFrameAlive = false;
     const candidateState = getActiveCandidateState(popupEntry);
+    syncPopupVideoModeBadge(popupEntry);
     logPreviewDebug('candidate mount', {
         popupId: popupEntry.popupId,
         attemptId,
@@ -2298,7 +2653,7 @@ function mountPopupIframe(popupEntry, url) {
             totalCandidates: activeCandidateState.totalCandidates,
             url: popupEntry.currentPreviewUrl
         });
-        if (activeCandidateState.isOriginalCandidate && activeCandidateState.hasAlternate) {
+        if (activeCandidateState.quickFailoverOnLoad) {
             logPreviewDebug('quick failover from original to alternate', {
                 popupId: popupEntry.popupId,
                 attemptId,
@@ -2333,12 +2688,12 @@ function mountPopupIframe(popupEntry, url) {
 
 function loadPopupUrl(popupEntry, url, options = {}) {
     if (!popupEntry || !url || !popupEntry.bodyContainer) return;
-    const { preserveCandidateIndex = false } = options;
+    const { preserveCandidateIndex = false, preserveSourceContext = true } = options;
+    const previewPlan = buildPreviewPlan(url, { enableExplicitVideoMode: videoModeEnabled });
     syncPopupReaderPageContext(popupEntry, popupEntry.currentUrl || url, { forceRefresh: true });
-    popupEntry.requestedUrl = url;
-    popupEntry.originalUrl = url;
-    popupEntry.previewIdentityKey = getPreviewIdentityKey(url);
-    popupEntry.previewCandidates = buildPreviewCandidates(url);
+    if (!popupEntry.requestedUrl) popupEntry.requestedUrl = url;
+    if (!popupEntry.originalUrl) popupEntry.originalUrl = url;
+    applyPreviewPlanToPopupEntry(popupEntry, previewPlan, { preserveSourceContext });
     popupEntry.activeCandidateIndex = preserveCandidateIndex
         ? Math.min(popupEntry.activeCandidateIndex, popupEntry.previewCandidates.length - 1)
         : 0;
@@ -2405,8 +2760,11 @@ function getPopupByRuntimeBinding(popupId, popupSessionId) {
 function reloadPopup(popupId) {
     const entry = getPopupById(popupId);
     if (!entry) return;
-    const reloadUrl = entry.currentUrl || entry.originalUrl || entry.requestedUrl;
-    loadPopupUrl(entry, reloadUrl);
+    const reloadUrl = entry.currentUrl || entry.currentPreviewUrl || entry.sourceCanonicalUrl || entry.requestedUrl;
+    if (!reloadUrl) return;
+    syncPopupReaderPageContext(entry, entry.currentUrl || reloadUrl, { forceRefresh: true });
+    setPopupLoadingState(entry);
+    mountPopupIframe(entry, reloadUrl);
 }
 
 function syncPopupCurrentUrlForEntry(popupEntry, currentUrl) {

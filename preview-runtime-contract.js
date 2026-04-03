@@ -8,6 +8,7 @@
   const PREVIEW_POPUP_WINDOW_NAME_PREFIX = '__link_preview_popup__:';
   const POPUP_RUNTIME_ACTIONS = Object.freeze({
     BRING_TO_FRONT: 'bringToFront',
+    NAVIGATE_PREVIEW: 'navigatePreview',
     UPDATE_URL: 'updatePopupUrl',
     FRAME_ALIVE: 'previewFrameAlive',
     REPORT_READERABILITY: 'reportReaderability',
