@@ -62,9 +62,6 @@
   "settings_tabs_features": {
     "message": "功能"
   },
-  "settings_tabs_compatibility": {
-    "message": "兼容性"
-  },
   "settings_tabs_appearanceLanguage": {
     "message": "外观与语言"
   },
@@ -145,21 +142,6 @@
   },
   "settings_videoMode_description": {
     "message": "启用时，受支持的视频链接会先尝试在嵌入播放器中打开。关闭时，它们会先尝试加载完整页面。"
-  },
-  "settings_compatibility_title": {
-    "message": "兼容性"
-  },
-  "settings_compatibility_intro": {
-    "message": "只有在网站出现问题时才修改这里。"
-  },
-  "settings_aggressiveCompatibility_title": {
-    "message": "激进兼容模式"
-  },
-  "settings_aggressiveCompatibility_description": {
-    "message": "为在预览中表现不佳的网站使用更强的后备方案。"
-  },
-  "settings_aggressiveCompatibility_warning": {
-    "message": "警告：此模式可能会破坏网站，并削弱部分限制。除非你正在排查特定兼容性问题，否则请保持关闭。"
   },
   "settings_appearance_title": {
     "message": "外观与语言"

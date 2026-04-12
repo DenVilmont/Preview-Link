@@ -51,7 +51,6 @@ document.addEventListener('DOMContentLoaded', async () => {
     language: document.getElementById('setting-language'),
     readerModeSuggestions: document.getElementById('setting-reader-mode-suggestions'),
     videoModeEnabled: document.getElementById('setting-video-mode-enabled'),
-    aggressiveCompatibilityMode: document.getElementById('setting-aggressive-compatibility-mode'),
     resetButton: document.getElementById('reset-settings-btn')
   };
 
@@ -149,7 +148,6 @@ document.addEventListener('DOMContentLoaded', async () => {
     form.language.value = settings.language;
     form.readerModeSuggestions.checked = settings.readerModeSuggestions;
     form.videoModeEnabled.checked = settings.videoModeEnabled;
-    form.aggressiveCompatibilityMode.checked = settings.aggressiveCompatibilityMode;
     updatePopupSizeHelper(settings.popupSizeUnit);
     updatePopupSizeInputAttributes(settings.popupSizeUnit);
     renderFieldError(form.hoverDelayError, '');
@@ -333,10 +331,6 @@ document.addEventListener('DOMContentLoaded', async () => {
 
   form.videoModeEnabled.addEventListener('change', async () => {
     await savePatch({ videoModeEnabled: form.videoModeEnabled.checked });
-  });
-
-  form.aggressiveCompatibilityMode.addEventListener('change', async () => {
-    await savePatch({ aggressiveCompatibilityMode: form.aggressiveCompatibilityMode.checked });
   });
 
   form.resetButton.addEventListener('click', async () => {

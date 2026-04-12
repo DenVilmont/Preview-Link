@@ -62,9 +62,6 @@
   "settings_tabs_features": {
     "message": "Features"
   },
-  "settings_tabs_compatibility": {
-    "message": "Compatibility"
-  },
   "settings_tabs_appearanceLanguage": {
     "message": "Appearance & language"
   },
@@ -145,21 +142,6 @@
   },
   "settings_videoMode_description": {
     "message": "When enabled, supported video links first try opening in the embedded player. When disabled, they first try loading the full page."
-  },
-  "settings_compatibility_title": {
-    "message": "Compatibility"
-  },
-  "settings_compatibility_intro": {
-    "message": "Only change this if a site is having trouble."
-  },
-  "settings_aggressiveCompatibility_title": {
-    "message": "Aggressive compatibility mode"
-  },
-  "settings_aggressiveCompatibility_description": {
-    "message": "Use a stronger fallback for sites that do not behave well in preview."
-  },
-  "settings_aggressiveCompatibility_warning": {
-    "message": "Warning: this mode may break sites and weakens some restrictions. Leave it off unless you are troubleshooting a specific compatibility problem."
   },
   "settings_appearance_title": {
     "message": "Appearance & language"

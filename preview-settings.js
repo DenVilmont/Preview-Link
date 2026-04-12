@@ -62,10 +62,10 @@
     'themeMode',
     'language',
     'readerModeSuggestions',
-    'videoModeEnabled',
-    'aggressiveCompatibilityMode'
+    'videoModeEnabled'
   ]);
   const LEGACY_KEYS = Object.freeze(['interactionKey']);
+  const OBSOLETE_KEYS = Object.freeze(['aggressiveCompatibilityMode']);
 
   const DEFAULT_SETTINGS = Object.freeze({
     enabled: true,
@@ -79,8 +79,7 @@
     themeMode: 'auto',
     language: 'auto',
     readerModeSuggestions: true,
-    videoModeEnabled: true,
-    aggressiveCompatibilityMode: false
+    videoModeEnabled: true
   });
 
   function createMessageDescriptor(messageKey, substitutions = []) {
@@ -137,8 +136,7 @@
       themeMode: normalizeThemeMode(rawSettings.themeMode),
       language: normalizeLanguageSetting(rawSettings.language),
       readerModeSuggestions: normalizeBoolean(rawSettings.readerModeSuggestions, DEFAULT_SETTINGS.readerModeSuggestions),
-      videoModeEnabled: normalizeBoolean(rawSettings.videoModeEnabled, DEFAULT_SETTINGS.videoModeEnabled),
-      aggressiveCompatibilityMode: normalizeBoolean(rawSettings.aggressiveCompatibilityMode, DEFAULT_SETTINGS.aggressiveCompatibilityMode)
+      videoModeEnabled: normalizeBoolean(rawSettings.videoModeEnabled, DEFAULT_SETTINGS.videoModeEnabled)
     };
   }
 
@@ -333,13 +331,13 @@
       [SETTINGS_MODEL_VERSION_KEY]: SETTINGS_MODEL_VERSION
     };
     const needsCanonicalWrite = Object.keys(canonicalPayload).some((key) => rawSettings[key] !== canonicalPayload[key]);
-    const legacyKeysToRemove = LEGACY_KEYS.filter((key) => rawSettings[key] !== undefined);
+    const keysToRemove = [...LEGACY_KEYS, ...OBSOLETE_KEYS].filter((key) => rawSettings[key] !== undefined);
 
     return {
       canonicalPayload,
       needsCanonicalWrite,
-      legacyKeysToRemove,
-      needsCanonicalization: needsCanonicalWrite || legacyKeysToRemove.length > 0
+      keysToRemove,
+      needsCanonicalization: needsCanonicalWrite || keysToRemove.length > 0
     };
   }
 
@@ -362,7 +360,7 @@
   }
 
   async function readRawSettings() {
-    return getStorageItems([...CANONICAL_KEYS, ...LEGACY_KEYS, SETTINGS_MODEL_VERSION_KEY]);
+    return getStorageItems([...CANONICAL_KEYS, ...LEGACY_KEYS, ...OBSOLETE_KEYS, SETTINGS_MODEL_VERSION_KEY]);
   }
 
   async function readSettings() {
@@ -373,8 +371,9 @@
     if (Object.keys(updates).length > 0) {
       await setStorageItems(updates);
     }
-    if (removals.length > 0) {
-      await removeStorageItems(removals);
+    const keysToRemove = [...removals, ...OBSOLETE_KEYS.filter((key) => rawSettings[key] !== undefined)];
+    if (keysToRemove.length > 0) {
+      await removeStorageItems(keysToRemove);
     }
 
     return normalizedSettings;
@@ -391,8 +390,9 @@
       ...getCanonicalStoragePayload(normalizedSettings),
       [SETTINGS_MODEL_VERSION_KEY]: SETTINGS_MODEL_VERSION
     });
-    if (rawSettings.interactionKey !== undefined) {
-      await removeStorageItems(['interactionKey']);
+    const keysToRemove = [...LEGACY_KEYS, ...OBSOLETE_KEYS].filter((key) => rawSettings[key] !== undefined);
+    if (keysToRemove.length > 0) {
+      await removeStorageItems(keysToRemove);
     }
 
     return normalizedSettings;
@@ -405,9 +405,9 @@
       [SETTINGS_MODEL_VERSION_KEY]: SETTINGS_MODEL_VERSION
     });
     const rawSettings = await readRawSettings();
-    const legacyKeysToRemove = LEGACY_KEYS.filter((key) => rawSettings[key] !== undefined);
-    if (legacyKeysToRemove.length > 0) {
-      await removeStorageItems(legacyKeysToRemove);
+    const keysToRemove = [...LEGACY_KEYS, ...OBSOLETE_KEYS].filter((key) => rawSettings[key] !== undefined);
+    if (keysToRemove.length > 0) {
+      await removeStorageItems(keysToRemove);
     }
     return defaults;
   }
@@ -416,21 +416,21 @@
     const {
       canonicalPayload,
       needsCanonicalWrite,
-      legacyKeysToRemove
+      keysToRemove
     } = getCanonicalizationPlan(rawSettings, normalizedSettings);
 
     if (needsCanonicalWrite) {
       await setStorageItems(canonicalPayload);
     }
-    if (legacyKeysToRemove.length > 0) {
-      await removeStorageItems(legacyKeysToRemove);
+    if (keysToRemove.length > 0) {
+      await removeStorageItems(keysToRemove);
     }
 
     return normalizedSettings;
   }
 
   function isSettingsChange(changes) {
-    return [...CANONICAL_KEYS, ...LEGACY_KEYS].some((key) => Object.prototype.hasOwnProperty.call(changes, key));
+    return [...CANONICAL_KEYS, ...LEGACY_KEYS, ...OBSOLETE_KEYS].some((key) => Object.prototype.hasOwnProperty.call(changes, key));
   }
 
   function subscribe(listener) {

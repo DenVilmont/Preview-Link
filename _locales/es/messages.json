@@ -62,9 +62,6 @@
   "settings_tabs_features": {
     "message": "Funciones"
   },
-  "settings_tabs_compatibility": {
-    "message": "Compatibilidad"
-  },
   "settings_tabs_appearanceLanguage": {
     "message": "Apariencia e idioma"
   },
@@ -145,21 +142,6 @@
   },
   "settings_videoMode_description": {
     "message": "Cuando está activado, los enlaces de video compatibles primero intentan abrirse en el reproductor incrustado. Cuando está desactivado, primero intentan cargar la página completa."
-  },
-  "settings_compatibility_title": {
-    "message": "Compatibilidad"
-  },
-  "settings_compatibility_intro": {
-    "message": "Cambia esto solo si un sitio tiene problemas."
-  },
-  "settings_aggressiveCompatibility_title": {
-    "message": "Modo de compatibilidad agresivo"
-  },
-  "settings_aggressiveCompatibility_description": {
-    "message": "Usa una alternativa más fuerte para sitios que no se comportan bien dentro de la vista previa."
-  },
-  "settings_aggressiveCompatibility_warning": {
-    "message": "Advertencia: este modo puede romper sitios y debilita algunas restricciones. Déjalo desactivado salvo que estés resolviendo un problema concreto de compatibilidad."
   },
   "settings_appearance_title": {
     "message": "Apariencia e idioma"

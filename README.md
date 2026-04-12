@@ -116,7 +116,6 @@ The current settings model includes:
 - UI language
 - reader mode suggestions
 - video mode
-- aggressive compatibility mode
 
 ## Localization
 

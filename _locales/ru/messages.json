@@ -62,9 +62,6 @@
   "settings_tabs_features": {
     "message": "Функции"
   },
-  "settings_tabs_compatibility": {
-    "message": "Совместимость"
-  },
   "settings_tabs_appearanceLanguage": {
     "message": "Внешний вид и язык"
   },
@@ -145,21 +142,6 @@
   },
   "settings_videoMode_description": {
     "message": "Если включено, поддерживаемые видеоссылки сначала пытаются открыться во встроенном плеере. Если выключено, сначала пытаются загрузить полную страницу."
-  },
-  "settings_compatibility_title": {
-    "message": "Совместимость"
-  },
-  "settings_compatibility_intro": {
-    "message": "Меняйте это только если у сайта есть проблемы."
-  },
-  "settings_aggressiveCompatibility_title": {
-    "message": "Агрессивный режим совместимости"
-  },
-  "settings_aggressiveCompatibility_description": {
-    "message": "Использовать более сильный резервный режим для сайтов, которые плохо работают в превью."
-  },
-  "settings_aggressiveCompatibility_warning": {
-    "message": "Предупреждение: этот режим может ломать сайты и ослабляет некоторые ограничения. Оставляйте его выключенным, если не устраняете конкретную проблему совместимости."
   },
   "settings_appearance_title": {
     "message": "Внешний вид и язык"
